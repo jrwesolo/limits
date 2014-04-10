@@ -11,7 +11,7 @@ action :create do
   if new_resource.system
     template_destination = node['limits']['system_conf']
   else
-    template_destination = template ::File.join(node['limits']['conf_dir'], "#{new_resource.name}.conf")
+    template_destination = ::File.join(node['limits']['conf_dir'], "#{new_resource.name}.conf")
   end
 
   t = template template_destination do
@@ -34,7 +34,7 @@ action :delete do
   if new_resource.system
     template_destination = node['limits']['system_conf']
   else
-    template_destination = template ::File.join(node['limits']['conf_dir'], "#{new_resource.name}.conf")
+    template_destination = ::File.join(node['limits']['conf_dir'], "#{new_resource.name}.conf")
   end
 
   t = template template_destination do
