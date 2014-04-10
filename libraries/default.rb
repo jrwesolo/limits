@@ -1,4 +1,4 @@
-def validate_limits(limits = [], validate = true)
+def validate_limits(limits = [])
   valid = []
   invalid = []
 
