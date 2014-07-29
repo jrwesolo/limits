@@ -1,3 +1,7 @@
+def whyrun_supported?
+  true
+end
+
 action :create do
   directory node['limits']['conf_dir'] do
     mode 0755
