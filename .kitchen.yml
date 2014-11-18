@@ -15,3 +15,7 @@ suites:
     run_list:
       - recipe[limits::default]
     attributes:
+  - name: limits_definition
+    run_list:
+      - recipe[limits_definition::default]
+    attributes:
