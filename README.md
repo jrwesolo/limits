@@ -33,7 +33,7 @@ Recipes
 ## default
 
 Include the default recipe in a run list in order to configure the
-system limits.conf. Attribute node['limits']['system_limits'] will be used.
+system limits.conf. Attribute `node['limits']['system_limits']` will be used.
 
 Resources/Providers
 ===================
@@ -41,7 +41,7 @@ Resources/Providers
 ## limits_config
 
 This cookbook contains the `limits_config` LWRP. This LWRP will use
-node['limits']['conf_dir'] to lay down a limits.d configuration file.
+`node['limits']['conf_dir']` to lay down a limits.d configuration file.
 
 ### Actions
 
@@ -53,34 +53,51 @@ node['limits']['conf_dir'] to lay down a limits.d configuration file.
 - `name`: will be used as the conf file name (limits.d/#{name}.conf)
 - `limits`: array of limits (See example below for format)
 - `system`: true or false, ignores name attribute in favor of
-node['limits']['system_conf'] path
+`node['limits']['system_conf']` path
 
-### Examples
+### LWRP Examples
 
-    tomcat_limits = [{ 'domain' => 'tomcat',
-                        'type'   => '-',
-                        'item' => 'nofile',
-                        'value' => '4096' }]
+```ruby
+tomcat_limits = [{ 'domain' => 'tomcat',
+                    'type'   => '-',
+                    'item' => 'nofile',
+                    'value' => '4096' }]
 
-    # creates /etc/security/limits.d/tomcat.conf
-    limits_config 'tomcat' do
-      limits tomcat_limits
-      action :create
-    end
+# creates /etc/security/limits.d/tomcat.conf
+limits_config 'tomcat' do
+  limits tomcat_limits
+  action :create
+end
 
-    # creates /etc/security/limits.conf
-    limits_config 'configure system limits.conf' do
-      limits tomcat_limits
-      system true
-      action :create
-    end 
+# creates /etc/security/limits.conf
+limits_config 'configure system limits.conf' do
+  limits tomcat_limits
+  system true
+  action :create
+end
+```
+
+### Definition Examples
+```ruby
+set_limits "nobody" do
+  type '-'
+  item 'nofile'
+  value '4096'
+end
+
+set_limits "nobody" do
+  type 'hard'
+  item 'nproc'
+  value '1024'
+end
+```
 
 Usage
 =====
 
 Simply add dependency to gain access to limits_config LWRP (examples above).
-In order to configure /etc/security/limits.conf, set node['limits']['system_limits']
-and include_recipe 'limits::default'.
+In order to configure /etc/security/limits.conf, set `node['limits']['system_limits']`
+and `include_recipe 'limits::default'`.
 
 Testing
 =======
