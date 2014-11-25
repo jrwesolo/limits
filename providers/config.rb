@@ -8,14 +8,15 @@ action :create do
     owner 'root'
     group 'root'
     recursive true
-  end unless ::File.directory?(node['limits']['conf_dir']) # CHEF-3694
+  end unless File.directory?(node['limits']['conf_dir']) # CHEF-3694
 
   valid, invalid = validate_limits(new_resource.limits)
 
   if new_resource.system
     template_destination = node['limits']['system_conf']
   else
-    template_destination = ::File.join(node['limits']['conf_dir'], "#{new_resource.name}.conf")
+    template_destination = File.join(node['limits']['conf_dir'],
+                                     "#{new_resource.name}.conf")
   end
 
   t = template template_destination do
@@ -24,10 +25,8 @@ action :create do
     mode 0644
     owner 'root'
     group 'root'
-    variables(
-      :valid_limits => valid,
-      :invalid_limits => invalid
-    )
+    variables valid_limits: valid,
+              invalid_limits: invalid
     action :create
   end
 
@@ -38,7 +37,8 @@ action :delete do
   if new_resource.system
     template_destination = node['limits']['system_conf']
   else
-    template_destination = ::File.join(node['limits']['conf_dir'], "#{new_resource.name}.conf")
+    template_destination = File.join(node['limits']['conf_dir'],
+                                     "#{new_resource.name}.conf")
   end
 
   t = template template_destination do

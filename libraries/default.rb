@@ -4,11 +4,9 @@ def validate_limits(limits = [])
 
   # http://linux.die.net/man/5/limits.conf
   valid_type = %w(hard soft -)
-  valid_item = %w(core data fsize memlock
-                  nofile rss stack cpu nproc
-                  as maxlogins maxsyslogins
-                  priority locks sigpending
-                  msgqueue nice rtprio)
+  valid_item = %w(core data fsize memlock nofile rss stack
+                  cpu nproc as maxlogins maxsyslogins priority
+                  locks sigpending msgqueue nice rtprio)
 
   limits.each do |limit|
     if valid_type.include?(limit['type']) &&

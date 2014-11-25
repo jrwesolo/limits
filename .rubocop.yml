@@ -1,10 +1,7 @@
+SingleSpaceBeforeFirstArg:
+  Exclude:
+    - '**/metadata.rb'
 CyclomaticComplexity:
   Max: 10
-Encoding:
-  Enabled: false
-LineLength:
-  Enabled: false
 MethodLength:
-  Enabled: false
-HashSyntax:
-  Enabled: false
+  Max: 20
