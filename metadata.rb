@@ -1,7 +1,7 @@
 name             'limits'
 maintainer       'Jordan Wesolowski'
 maintainer_email 'jrwesolo@gmail.com'
-license          'Apache 2.0'
+license          'MIT'
 description      'Configures limits'
 long_description IO.read(File.join(File.dirname(__FILE__), 'README.md'))
 version '0.2.0'
