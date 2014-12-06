@@ -23,5 +23,6 @@ if platform_family?('debian')
   end
 end
 
-include_recipe "#{cookbook_name}::simple"
-include_recipe "#{cookbook_name}::complex"
+%w(basic empty invalid mixed sanitized system).each do |r|
+  include_recipe "#{cookbook_name}::#{r}"
+end
