@@ -35,4 +35,3 @@ context 'Bob' do
   end
 
 end
-
