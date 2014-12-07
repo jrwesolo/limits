@@ -4,12 +4,12 @@ maintainer_email 'jrwesolo@gmail.com'
 license          'MIT'
 description      'Configures limits'
 long_description IO.read(File.join(File.dirname(__FILE__), 'README.md'))
-version '0.2.0'
+version '1.0.0'
 
-supports 'ubuntu', '>= 10.04'
-supports 'debian', '>= 6.0'
-supports 'centos', '>= 5.9'
-supports 'redhat', '>= 5.9'
-supports 'fedora', '>= 18.0'
+# Berkshelf blows up with these, will add later.
+# source_url 'https://github.com/jrwesolo/limits'
+# issues_url 'https://github.com/jrwesolo/limits/issues'
 
-recipe 'limits::default', 'Used to configure system limits.conf'
+%w(ubuntu debian fedora centos redhat).each do |p|
+  supports p
+end
