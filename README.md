@@ -150,6 +150,36 @@ alice soft nofile 1024
 * soft nofile 1024
 ```
 
+## Attributes
+
+### `limits`
+
+### Attribute Parameters
+
+| Key | Type | Description | Default | Required |
+| --- | ---- | ----------- | ------- | -------- |
+| `use_system` | Boolean | Set a system-wide limit? | `false` | no |
+| `filename` | String | Filename that will contain limit | *`{resource name}`*, unused if `use_system == true` | no |
+| `domain` | String or Integer | domain of limit | *`{resource name}`* | no |
+| `type` | String or Integer | type of limit | `nil` | yes |
+| `item` | String or Integer | item of limit | `nil` | yes |
+| `value` | String or Integer | value of limit | `nil` | yes |
+
+### Example
+```ruby
+"limits" => {
+  "limits" => {
+    "system" => {
+      "use_system" => true,
+      "domain" => "*",
+      "type" => "-",
+      "item" => "nofile",
+      "value" => "1048576"
+    }
+  }
+}
+```
+
 Testing
 =======
 
