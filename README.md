@@ -1,7 +1,7 @@
 Limits Cookbook
 ===============
 
-This cookbook is used to configure system limits.conf as well as limits.d configuration files. It is available at the [Supermarket](https://supermarket.chef.io/cookbooks/limits) or [GitHub](https://github.com/jrwesolo/limits).
+This cookbook is used to configure system limits.conf as well as limits.d configuration files. It is available at the [Supermarket](https://supermarket.chef.io/cookbooks/limits) or [GitHub](https://github.com/jrwesolo/limits). The limits cookbook does not provide any recipes and is intended to be used purely through the resources to configure system limits. 
 
 ## Platforms
 
