@@ -1,7 +1,0 @@
-inherit_from: .rubocop_todo.yml
-
-SingleSpaceBeforeFirstArg:
-  Exclude:
-    - '**/metadata.rb'
-CyclomaticComplexity:
-  Max: 10

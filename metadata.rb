@@ -1,15 +1,22 @@
 name             'limits'
 maintainer       'Jordan Wesolowski'
-maintainer_email 'jrwesolo@gmail.com'
+maintainer_email 'N/A'
 license          'MIT'
-description      'Configures limits'
-long_description IO.read(File.join(File.dirname(__FILE__), 'README.md'))
-version '1.0.0'
+description      'Configures limits for the pam_limits module'
+long_description 'Configures limits for the pam_limits module'
+version          '2.0.0'
+chef_version     '>= 12', '< 16'
 
-# Berkshelf blows up with these, will add later.
-# source_url 'https://github.com/jrwesolo/limits'
-# issues_url 'https://github.com/jrwesolo/limits/issues'
+# The `source_url` points to the development repository for this cookbook.  A
+# `View Source` link will be displayed on this cookbook's page when uploaded to
+# a Supermarket.
+source_url 'https://github.com/jrwesolo/limits'
 
-%w(ubuntu debian fedora centos redhat).each do |p|
-  supports p
+# The `issues_url` points to the location where issues for this cookbook are
+# tracked.  A `View Issues` link will be displayed on this cookbook's page when
+# uploaded to a Supermarket.
+issues_url 'https://github.com/jrwesolo/limits/issues'
+
+%w(centos debian fedora redhat ubuntu).each do |platform|
+  supports platform
 end

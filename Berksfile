@@ -1,8 +1,7 @@
 source 'https://supermarket.chef.io'
 
-metadata
-
 group :integration do
-  cookbook 'limits_test_cookbook',
-           path: 'test/fixtures/cookbooks/limits_test_cookbook'
+  cookbook 'limits_test', path: 'test/fixtures/cookbooks/limits_test'
 end
+
+metadata
