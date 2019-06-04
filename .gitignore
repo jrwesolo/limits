@@ -1,15 +1,22 @@
 .vagrant
-Berksfile.lock
-Gemfile.lock
 *~
 *#
 .#*
 \#*#
 .*.sw[a-z]
 *.un~
-.bundle
-.cache
-.kitchen
-bin
+
+# Bundler
+Gemfile.lock
+gems.locked
+bin/*
+.bundle/*
+
+# test kitchen
+.kitchen/
 .kitchen.local.yml
-.coverage
+
+# Chef
+Berksfile.lock
+.zero-knife.rb
+Policyfile.lock.json

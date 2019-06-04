@@ -1,0 +1,40 @@
+---
+driver:
+  name: dokken
+
+transport:
+  name: dokken
+
+provisioner:
+  name: dokken
+  deprecations_as_errors: true
+
+verifier:
+  name: inspec
+
+# Most recent stable release for each
+# major version will be tested below:
+# https://downloads.chef.io/chef/stable
+
+platforms:
+- name: centos-7-chef-12
+  driver:
+    image: dokken/centos-7
+    chef_version: 12.22.5
+- name: centos-7-chef-13
+  driver:
+    image: dokken/centos-7
+    chef_version: 13.12.14
+- name: centos-7-chef-14
+  driver:
+    image: dokken/centos-7
+    chef_version: 14.13.11
+- name: centos-7-chef-15
+  driver:
+    image: dokken/centos-7
+    chef_version: 15.0.300
+
+suites:
+  - name: default
+    run_list:
+      - recipe[limits_test]
