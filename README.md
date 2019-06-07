@@ -47,7 +47,7 @@ limits_file '/etc/security/limits.d/001_vader.conf' do
 end
 
 limit 'example-3' do
-  path '/etc/security/limits.d/001_vader.conf' do
+  path '/etc/security/limits.d/001_vader.conf'
   domain 'vader'
   type 'hard'
   item 'nofile'
