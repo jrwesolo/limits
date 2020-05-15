@@ -165,17 +165,16 @@ end
 Testing
 =======
 
-Testing was performed using [Chef Workstation 0.3.2][4].
+Testing was performed using [Chef Workstation 0.18.3][4].
 
 ```
 $ chef --version
-Chef Workstation: 0.3.2
-  chef-run: 0.2.13
-  chef-client: 14.13.11
-  delivery-cli: 0.0.52 (9d07501a3b347cc687c902319d23dc32dd5fa621)
-  berks: 7.0.8
-  test-kitchen: 1.25.0
-  inspec: 3.9.3
+Chef Workstation version: 0.18.3
+Chef Infra Client version: 15.10.12
+Chef InSpec version: 4.18.111
+Chef CLI version: 2.0.10
+Test Kitchen version: 2.5.0
+Cookstyle version: 6.3.4
 ```
 
 Perform tests using the following commands:
@@ -190,4 +189,4 @@ chef exec kitchen test    # integration tests
 [1]: https://supermarket.chef.io/cookbooks/limits
 [2]: https://github.com/jrwesolo/limits
 [3]: https://linux.die.net/man/5/limits.conf
-[4]: https://downloads.chef.io/chef-workstation/stable/0.3.2
+[4]: https://downloads.chef.io/chef-workstation/stable/0.18.3

@@ -28,11 +28,15 @@ platforms:
 - name: centos-7-chef-14
   driver:
     image: dokken/centos-7
-    chef_version: 14.13.11
+    chef_version: 14.15.6
 - name: centos-7-chef-15
   driver:
     image: dokken/centos-7
-    chef_version: 15.0.300
+    chef_version: 15.10.12
+- name: centos-7-chef-16
+  driver:
+    image: dokken/centos-7
+    chef_version: 16.1.0
 
 suites:
   - name: default

@@ -1,6 +1,12 @@
 limits cookbook CHANGELOG
 =========================
 
+v2.1.0 (2020-05-15)
+-------------------
+
+* Add support for Chef 16.x
+* Update Chef Workstation to 0.18.3
+
 v2.0.0 (2019-06-04)
 -------------------
 
