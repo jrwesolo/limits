@@ -24,7 +24,7 @@ property :item,
 
 property :value,
          [Integer, String],
-         required: true,
+         required: [:create],
          coerce: proc { |x| Limits::Helpers.normalize_value(x) },
          callbacks: { 'should not be empty' => ->(x) { !x.to_s.empty? } }
 
