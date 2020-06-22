@@ -1,4 +1,5 @@
-resource_name :limit
+resource_name :limit # backwards-compatibility for Chef < 16
+provides :limit
 
 property :path,
          String,

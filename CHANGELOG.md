@@ -1,6 +1,14 @@
 limits cookbook CHANGELOG
 =========================
 
+v2.1.1 (2020-06-22)
+-------------------
+
+* Chef 16.2.x had a backwards-incompatible change related to custom
+  resources. This version supports the new style while maintaining
+  backwards-compatibility.
+* Update Chef Workstation to 20.6.62
+
 v2.1.0 (2020-05-15)
 -------------------
 
