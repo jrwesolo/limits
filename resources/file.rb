@@ -1,4 +1,5 @@
-resource_name :limits_file
+resource_name :limits_file # backwards-compatibility for Chef < 16
+provides :limits_file
 
 property :path, String, name_property: true
 property :owner, [String, Integer], default: 'root'
