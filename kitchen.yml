@@ -8,35 +8,71 @@ transport:
 provisioner:
   name: dokken
   deprecations_as_errors: true
+  enforce_idempotency: true
+  multiple_converge: 2
 
 verifier:
   name: inspec
 
-# Most recent stable release for each
-# major version will be tested below:
-# https://downloads.chef.io/chef/stable
+# using latest OS version created for use with Dokken:
+# https://hub.docker.com/u/dokken
+.os_images:
+- &centos dokken/centos-8
+- &debian dokken/debian-10
+- &fedora dokken/fedora-33
+- &ubuntu dokken/ubuntu-20.10
 
+# using latest stable from each major version when
+# generally available, otherwise using latest current:
+# https://downloads.chef.io/products/infra-client/stable
+# https://downloads.chef.io/products/infra-client/current
+.chef_versions:
+- &chef_12 12.22.5
+- &chef_13 13.12.14
+- &chef_14 14.15.6
+- &chef_15 15.13.8
+- &chef_16 16.8.14 # latest stable
+- &chef_17 17.0.3 # in development
+
+# test all major Chef versions on single OS and
+# latest stable Chef version on all other OS:
 platforms:
-- name: centos-7-chef-12
+- name: debian-chef-12
   driver:
-    image: dokken/centos-7
-    chef_version: 12.22.5
-- name: centos-7-chef-13
+    image: *debian
+    chef_version: *chef_12
+- name: debian-chef-13
   driver:
-    image: dokken/centos-7
-    chef_version: 13.12.14
-- name: centos-7-chef-14
+    image: *debian
+    chef_version: *chef_13
+- name: debian-chef-14
   driver:
-    image: dokken/centos-7
-    chef_version: 14.15.6
-- name: centos-7-chef-15
+    image: *debian
+    chef_version: *chef_14
+- name: debian-chef-15
   driver:
-    image: dokken/centos-7
-    chef_version: 15.11.8
-- name: centos-7-chef-16
+    image: *debian
+    chef_version: *chef_15
+- name: debian-chef-16
   driver:
-    image: dokken/centos-7
-    chef_version: 16.2.44
+    image: *debian
+    chef_version: *chef_16
+- name: debian-chef-17
+  driver:
+    image: *debian
+    chef_version: *chef_17
+- name: centos-chef-16
+  driver:
+    image: *centos
+    chef_version: *chef_16
+- name: fedora-chef-16
+  driver:
+    image: *fedora
+    chef_version: *chef_16
+- name: ubuntu-chef-16
+  driver:
+    image: *ubuntu
+    chef_version: *chef_16
 
 suites:
   - name: default

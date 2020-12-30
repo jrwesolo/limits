@@ -14,11 +14,13 @@ property :domain,
          callbacks: { 'should not be empty' => ->(x) { !x.empty? } }
 
 property :type,
+         String,
          equal_to: Limits::TYPES,
          required: true,
          identity: true
 
 property :item,
+         String,
          equal_to: Limits::ITEMS,
          required: true,
          identity: true
