@@ -162,31 +162,6 @@ limit 'delete example' do
 end
 ```
 
-Testing
-=======
-
-Testing was performed using [Chef Workstation 20.6.62][4].
-
-```
-$ chef --version
-Chef Workstation version: 20.6.62
-Chef Infra Client version: 16.1.16
-Chef InSpec version: 4.19.0
-Chef CLI version: 3.0.4
-Test Kitchen version: 2.5.1
-Cookstyle version: 6.7.3
-```
-
-Perform tests using the following commands:
-
-```bash
-chef exec foodcritic .    # linting for common issues
-chef exec cookstyle       # linting based on RuboCop
-chef exec rspec           # spec tests
-chef exec kitchen test    # integration tests
-```
-
 [1]: https://supermarket.chef.io/cookbooks/limits
 [2]: https://github.com/jrwesolo/limits
 [3]: https://linux.die.net/man/5/limits.conf
-[4]: https://downloads.chef.io/chef-workstation/stable/20.6.62

@@ -7,7 +7,7 @@ module Limits
 
     # Removing leading '#' and optional space from each line.
     def self.normalize_comment(comment)
-      return nil unless comment
+      return unless comment
 
       lines = comment.lines.map(&:chomp)
       lines.map! { |line| line.sub(/^#[ \t]?/, '') }
@@ -19,7 +19,7 @@ module Limits
     # there is anything afterwards. Trailing whitespace is also removed.
     # Comment will always end in a newline for proper formatting.
     def self.format_comment(comment)
-      return nil unless comment
+      return unless comment
 
       lines = comment.lines.map(&:chomp)
       lines.push('') if comment.end_with?("\n")

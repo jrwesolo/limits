@@ -11,8 +11,8 @@ files_for_setup = %w(
 files_for_setup.each do |path|
   cookbook_file path do
     source ::File.basename(path)
-    owner 'nobody'
-    group 'nobody'
+    owner node['setup']['owner']
+    group node['setup']['group']
     mode '0755'
     backup false
     action :create
