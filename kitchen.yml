@@ -31,8 +31,9 @@ verifier:
 - &chef_13 13.12.14
 - &chef_14 14.15.6
 - &chef_15 15.13.8
-- &chef_16 16.8.14 # latest stable
-- &chef_17 17.0.3 # in development
+- &chef_16 16.8.14 
+- &chef_17 17.0.3 
+- &chef_18 18.0.169 # latest stable
 
 # test all major Chef versions on single OS and
 # latest stable Chef version on all other OS:
@@ -61,18 +62,34 @@ platforms:
   driver:
     image: *debian
     chef_version: *chef_17
+- name: debian-chef-18
+  driver:
+    image: *debian
+    chef_version: *chef_18
 - name: centos-chef-16
   driver:
     image: *centos
     chef_version: *chef_16
+- name: centos-chef-18
+  driver:
+    image: *centos
+    chef_version: *chef_18
 - name: fedora-chef-16
   driver:
     image: *fedora
     chef_version: *chef_16
+- name: fedora-chef-18
+  driver:
+    image: *fedora
+    chef_version: *chef_18
 - name: ubuntu-chef-16
   driver:
     image: *ubuntu
     chef_version: *chef_16
+- name: ubuntu-chef-18
+  driver:
+    image: *ubuntu
+    chef_version: *chef_18
 
 suites:
   - name: default
