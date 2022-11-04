@@ -34,7 +34,7 @@ module Limits
     end
 
     def write!
-      ::File.open(@path, 'w') { |file| file.write(self) }
+      ::File.write(@path, self)
     end
 
     def add(new)

@@ -17,23 +17,23 @@ verifier:
 # using latest OS version created for use with Dokken:
 # https://hub.docker.com/u/dokken
 .os_images:
-- &centos dokken/centos-8
-- &debian dokken/debian-10
-- &fedora dokken/fedora-33
-- &ubuntu dokken/ubuntu-20.10
+- &centos dokken/centos-stream-9
+- &debian dokken/debian-11
+- &fedora dokken/fedora-36
+- &ubuntu dokken/ubuntu-22.10
 
 # using latest stable from each major version when
 # generally available, otherwise using latest current:
-# https://downloads.chef.io/products/infra-client/stable
-# https://downloads.chef.io/products/infra-client/current
+# https://www.chef.io/downloads/tools/infra-client
+# https://www.chef.io/downloads/tools/infra-client/current
 .chef_versions:
 - &chef_12 12.22.5
 - &chef_13 13.12.14
 - &chef_14 14.15.6
-- &chef_15 15.13.8
-- &chef_16 16.8.14 
-- &chef_17 17.0.3 
-- &chef_18 18.0.169 # latest stable
+- &chef_15 15.17.4
+- &chef_16 16.18.0
+- &chef_17 17.10.3
+- &chef_18 18.0.169
 
 # test all major Chef versions on single OS and
 # latest stable Chef version on all other OS:
@@ -66,26 +66,14 @@ platforms:
   driver:
     image: *debian
     chef_version: *chef_18
-- name: centos-chef-16
-  driver:
-    image: *centos
-    chef_version: *chef_16
 - name: centos-chef-18
   driver:
     image: *centos
     chef_version: *chef_18
-- name: fedora-chef-16
-  driver:
-    image: *fedora
-    chef_version: *chef_16
 - name: fedora-chef-18
   driver:
     image: *fedora
     chef_version: *chef_18
-- name: ubuntu-chef-16
-  driver:
-    image: *ubuntu
-    chef_version: *chef_16
 - name: ubuntu-chef-18
   driver:
     image: *ubuntu
@@ -93,5 +81,3 @@ platforms:
 
 suites:
   - name: default
-    run_list:
-      - recipe[limits_test]
