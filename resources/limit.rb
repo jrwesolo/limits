@@ -1,3 +1,5 @@
+unified_mode true if Chef::VERSION.to_f >= 15.3
+
 resource_name :limit # backwards-compatibility for Chef < 16
 provides :limit
 

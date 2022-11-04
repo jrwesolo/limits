@@ -1,10 +1,15 @@
 limits cookbook CHANGELOG
 =========================
 
-[v2.2.1][] (2022-11-04)
+[v2.3.0][] (2022-11-04)
 -----------------------
-* Added testing for Chef Infra Client 18
 
+* Add support for Chef Infra Client 18
+* Update Chef Workstation to 22.10.1013
+* Update platform versions for Test Kitchen
+* Update Chef Infra Client versions for Test Kitchen
+* Move to policy files for Test Kitchen
+* Cookstyle-recommended fixes
 
 [v2.2.0][] (2020-12-30)
 -----------------------
@@ -66,6 +71,7 @@ limits be able to be specified using attributes. Please see the
 
 * Initial release of limits
 
+[v2.3.0]: https://github.com/jrwesolo/limits/tree/v2.3.0
 [v2.2.0]: https://github.com/jrwesolo/limits/tree/v2.2.0
 [v2.1.1]: https://github.com/jrwesolo/limits/tree/v2.1.1
 [v2.1.0]: https://github.com/jrwesolo/limits/tree/v2.1.0
