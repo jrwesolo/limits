@@ -13,71 +13,33 @@ provisioner:
 
 verifier:
   name: inspec
+  inspec_tests:
+    - test/integration/default
 
-# using latest OS version created for use with Dokken:
-# https://hub.docker.com/u/dokken
-.os_images:
-- &centos dokken/centos-stream-9
-- &debian dokken/debian-11
-- &fedora dokken/fedora-36
-- &ubuntu dokken/ubuntu-22.10
-
-# using latest stable from each major version when
-# generally available, otherwise using latest current:
-# https://www.chef.io/downloads/tools/infra-client
-# https://www.chef.io/downloads/tools/infra-client/current
-.chef_versions:
-- &chef_12 12.22.5
-- &chef_13 13.12.14
-- &chef_14 14.15.6
-- &chef_15 15.17.4
-- &chef_16 16.18.0
-- &chef_17 17.10.3
-- &chef_18 18.0.169
-
-# test all major Chef versions on single OS and
-# latest stable Chef version on all other OS:
 platforms:
-- name: debian-chef-12
+- name: debian
   driver:
-    image: *debian
-    chef_version: *chef_12
-- name: debian-chef-13
+    image: dokken/debian-13
+- name: centos
   driver:
-    image: *debian
-    chef_version: *chef_13
-- name: debian-chef-14
+    image: dokken/centos-stream-10
+- name: fedora
   driver:
-    image: *debian
-    chef_version: *chef_14
-- name: debian-chef-15
+    image: dokken/fedora-43
+- name: ubuntu
   driver:
-    image: *debian
-    chef_version: *chef_15
-- name: debian-chef-16
-  driver:
-    image: *debian
-    chef_version: *chef_16
-- name: debian-chef-17
-  driver:
-    image: *debian
-    chef_version: *chef_17
-- name: debian-chef-18
-  driver:
-    image: *debian
-    chef_version: *chef_18
-- name: centos-chef-18
-  driver:
-    image: *centos
-    chef_version: *chef_18
-- name: fedora-chef-18
-  driver:
-    image: *fedora
-    chef_version: *chef_18
-- name: ubuntu-chef-18
-  driver:
-    image: *ubuntu
-    chef_version: *chef_18
+    image: dokken/ubuntu-25.10
 
 suites:
-  - name: default
+  - name: chef-19
+    driver:
+      chef_image: chef/chef-hab
+      chef_version: 19.2.77
+    provisioner:
+      chef_binary: /hab/pkgs/chef/chef-infra-client/19.2.77/20260414044356/bin/chef-client
+  - name: chef-18
+    driver:
+      chef_version: 18.10.47
+  - name: chef-17
+    driver:
+      chef_version: 17.10.163
