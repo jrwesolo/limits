@@ -1,6 +1,14 @@
 limits cookbook CHANGELOG
 =========================
 
+[v2.4.1][] (2026-04-22)
+-----------------------
+
+* Repackage previous version without macOS-related issues. Root-cause
+  was using the BSD flavor of `tar` which was including macOS extended
+  attributes. Changing to the GNU flavor of `tar` does not include
+  these extended attributes.
+
 [v2.4.0][] (2026-04-19)
 -----------------------
 
@@ -80,6 +88,7 @@ limits be able to be specified using attributes. Please see the
 
 * Initial release of limits
 
+[v2.4.1]: https://github.com/jrwesolo/limits/tree/v2.4.1
 [v2.4.0]: https://github.com/jrwesolo/limits/tree/v2.4.0
 [v2.3.0]: https://github.com/jrwesolo/limits/tree/v2.3.0
 [v2.2.0]: https://github.com/jrwesolo/limits/tree/v2.2.0
