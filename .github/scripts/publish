@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+#
+# Shares the cookbook to Chef Supermarket. Intended to run only after the
+# release script has actually tagged and published a new version, which is what
+# the workflow's `released` output gates on.
+#
+# That ordering is not incidental. Supermarket evaluates its version_tag quality
+# metric at share time by asking GitHub for the repository's tags and looking
+# for either the bare version or a v-prefixed one. Sharing before the tag exists
+# fails the metric permanently for that version, since nothing re-evaluates it.
+#
+# Idempotent: if Supermarket already carries this version the script exits 0
+# without uploading, so a re-run of a partially failed job is safe.
+#
+# Expects SUPERMARKET_USER and SUPERMARKET_KEY (the PEM itself, not a path) in
+# the environment, and cinc, git, curl and tar on PATH. Run it from the root of
+# a checkout that has origin set.
+
+set -euo pipefail
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
+
+: "${SUPERMARKET_USER:?must be set to the Supermarket account name}"
+: "${SUPERMARKET_KEY:?must be set to the Supermarket client key}"
+
+site=${SUPERMARKET_SITE:-https://supermarket.chef.io}
+
+version="$(cookbook_version)"
+if [[ -z ${version} ]]; then
+  echo "::error file=metadata.rb::Could not parse the version."
+  exit 1
+fi
+
+tag="v${version}"
+
+# Publish what the tag points at rather than whatever happens to be checked
+# out. In the workflow those are the same commit, but only by implication:
+# actions/checkout puts both the release and publish jobs on the run's
+# github.sha, and the release job tags that same sha. Resolving the tag by name
+# makes the guarantee explicit, and makes the script correct when it is re-run
+# or invoked by hand against a checkout that has moved on.
+#
+# The checkout is shallow and carries no tags, so fetch just this one. Doing it
+# before anything else means a publish without a release fails on the
+# fundamental problem rather than on a symptom of it.
+if ! git fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null &&
+   ! git rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null; then
+  echo "::error::${tag} is not tagged. Publish must run after a successful release."
+  exit 1
+fi
+
+# From here on the identity comes from the tag, so the name and the content
+# being published are read from the same place. The version is the exception:
+# it is what names the tag, so it has to be read from the working tree first,
+# and is then checked against the tag rather than trusted.
+metadata="$(git show "refs/tags/${tag}:metadata.rb")"
+name="$(cookbook_name <(printf '%s\n' "${metadata}"))"
+tag_version="$(cookbook_version <(printf '%s\n' "${metadata}"))"
+
+if [[ -z ${name} ]]; then
+  echo "::error::${tag} carries no parseable cookbook name in metadata.rb."
+  exit 1
+fi
+
+if [[ ${tag_version} != "${version}" ]]; then
+  echo "::error::${tag} declares version ${tag_version}, not ${version}."
+  exit 1
+fi
+
+echo "Publishing ${name} ${version} from ${tag} at $(git rev-parse --short "refs/tags/${tag}^{commit}")"
+
+# A 404 is the expected answer for a version that has not been shared yet, so
+# check the status explicitly rather than letting curl -f treat it as an error.
+# Anything else means the question went unanswered, which is not the same as no.
+status="$(curl -sS -o /dev/null -w '%{http_code}' \
+  "${site}/api/v1/cookbooks/${name}/versions/${version}")" || true
+
+case ${status} in
+  200)
+    echo "${name} ${version} is already on Supermarket, nothing to publish."
+    exit 0
+    ;;
+  404)
+    ;;
+  *)
+    echo "::error::Unexpected HTTP ${status} asking ${site} about ${name} ${version}."
+    exit 1
+    ;;
+esac
+
+# knife shares a directory named after the cookbook from within a cookbook
+# path, so stage a copy under the right name. git archive keeps this to tracked
+# files; chefignore then narrows it further to the published artifact.
+staging="$(mktemp -d)"
+trap 'rm -rf "${staging}"' EXIT
+
+mkdir -p "${staging}/${name}"
+git archive "refs/tags/${tag}" | tar -x -C "${staging}/${name}"
+
+# Scope the tight umask to the key alone. Applying it to the whole script would
+# also narrow the extracted cookbook files to 0600, and knife stages them with
+# FileUtils.cp, which preserves the source mode into the published tarball.
+key_file="${staging}/client.pem"
+(umask 077; printf '%s\n' "${SUPERMARKET_KEY}" > "${key_file}")
+
+echo "Sharing ${name} ${version} to ${site}"
+cinc exec knife supermarket share "${name}" \
+  --cookbook-path "${staging}" \
+  --supermarket-site "${site}" \
+  --user "${SUPERMARKET_USER}" \
+  --key "${key_file}"

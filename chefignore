@@ -55,11 +55,11 @@ examples/*
 Guardfile
 Procfile
 .kitchen*
-kitchen.yml*
+kitchen*.yml*
 .rubocop.yml
-spec/*
 Rakefile
 .travis.yml
+.github/*
 .foodcritic
 .codeclimate.yml
 
@@ -91,6 +91,7 @@ vendor/*
 ##############
 Policyfile.rb
 Policyfile.lock.json
+chefignore
 
 # Cookbooks #
 #############

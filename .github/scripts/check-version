@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# Checks that a pull request which bumps the cookbook version proposes a
+# version that can actually be released: one that is not already tagged, and
+# one that is documented as the newest entry in the changelog.
+#
+# Both checks are skipped when the version is unchanged from the base branch,
+# so documentation-only pull requests are unaffected.
+#
+# Expects BASE_REF, GITHUB_REPOSITORY and GH_TOKEN in the environment. Run it
+# from the root of a checkout.
+
+set -euo pipefail
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
+
+: "${BASE_REF:?must be set to the pull request base branch}"
+: "${GITHUB_REPOSITORY:?must be set to owner/repo}"
+
+version="$(cookbook_version)"
+if [[ -z ${version} ]]; then
+  echo "::error file=metadata.rb::Could not parse the version."
+  exit 1
+fi
+
+git fetch --quiet --depth=1 origin "${BASE_REF}"
+base_version="$(cookbook_version <(git show FETCH_HEAD:metadata.rb))"
+
+echo "metadata.rb: ${version} (${BASE_REF}: ${base_version})"
+
+if [[ ${version} == "${base_version}" ]]; then
+  echo "Version unchanged, skipping release checks."
+  exit 0
+fi
+
+if tag_exists "v${version}"; then
+  echo "::error file=metadata.rb::v${version} is already tagged. Pick an unreleased version."
+  exit 1
+fi
+
+# The first version-shaped line in the file is the newest section heading. The
+# capture stops at the closing bracket, so anything appended after it makes no
+# difference to the match.
+newest=''
+while IFS= read -r line; do
+  if [[ ${line} =~ ^\[(v[0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+    newest="${BASH_REMATCH[1]}"
+    break
+  fi
+done < CHANGELOG.md
+
+if [[ ${newest} != "v${version}" ]]; then
+  echo "::error file=CHANGELOG.md::Newest entry is '${newest:-none}', expected 'v${version}'."
+  exit 1
+fi
+
+if ! grep -qF "[v${version}]: " CHANGELOG.md; then
+  echo "::error file=CHANGELOG.md::Missing the link reference for [v${version}]."
+  exit 1
+fi
+
+echo "v${version} is unreleased and is the newest changelog entry."

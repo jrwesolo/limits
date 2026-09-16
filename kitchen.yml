@@ -7,6 +7,10 @@ transport:
 
 provisioner:
   name: dokken
+  # Selects the Cinc rebuild of Chef Infra Client. kitchen-dokken derives both
+  # the image (cincproject/cinc) and the client binary
+  # (/opt/cinc/bin/cinc-client) from this, so neither needs to be set here.
+  product_name: cinc
   deprecations_as_errors: true
   enforce_idempotency: true
   multiple_converge: 2
@@ -17,29 +21,25 @@ verifier:
     - test/integration/default
 
 platforms:
-- name: debian
-  driver:
-    image: dokken/debian-13
-- name: centos
-  driver:
-    image: dokken/centos-stream-10
-- name: fedora
-  driver:
-    image: dokken/fedora-43
-- name: ubuntu
-  driver:
-    image: dokken/ubuntu-25.10
+  - name: debian-13
+    driver:
+      image: dokken/debian-13
+  - name: rockylinux-9
+    driver:
+      image: dokken/rockylinux-9
+  - name: fedora-43
+    driver:
+      image: dokken/fedora-43
+  - name: ubuntu-24.04
+    driver:
+      image: dokken/ubuntu-24.04
 
+# Major-version tags float to the newest Cinc release in that line. Cinc 17 is
+# not tested: cincproject/cinc:17 is published for amd64 only.
 suites:
-  - name: chef-19
+  - name: cinc-19
     driver:
-      chef_image: chef/chef-hab
-      chef_version: 19.2.77
-    provisioner:
-      chef_binary: /hab/pkgs/chef/chef-infra-client/19.2.77/20260414044356/bin/chef-client
-  - name: chef-18
+      chef_version: 19
+  - name: cinc-18
     driver:
-      chef_version: 18.10.47
-  - name: chef-17
-    driver:
-      chef_version: 17.10.163
+      chef_version: 18

@@ -1,6 +1,9 @@
-unified_mode true if Chef::VERSION.to_f >= 15.3
+unified_mode true
 
-resource_name :limit # backwards-compatibility for Chef < 16
+# Chef would derive limits_limit from the cookbook and filename. provides
+# exposes the shorter DSL name, and resource_name makes converge output
+# report it as `limit` to match.
+resource_name :limit
 provides :limit
 
 property :path,

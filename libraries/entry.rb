@@ -27,7 +27,7 @@ module Limits
 
     def to_s
       fields = [@domain, @type, @item, @value].compact.map(&:to_s)
-      fields.push("(#{@comment.gsub(/\n/, '\n')})") if @comment
+      fields.push("(#{@comment.gsub("\n", '\n')})") if @comment
       fields.join(' ')
     end
 
