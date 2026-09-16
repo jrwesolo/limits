@@ -1,11 +1,13 @@
 Limits Cookbook
 ===============
 
+[![ci][1]][2]
+
 This cookbook is used to configure limits for the `pam_limits` module.
 By default, the configuration file is located at
 `/etc/security/limits.conf`. It can also configure limits in any
 arbitrary path such as files in the directory `/etc/security/limit.d`.
-It is available on the [Chef Supermarket][1] or [GitHub][2].
+It is available on the [Chef Supermarket][3] or [GitHub][4].
 
 Usage
 =====
@@ -124,7 +126,7 @@ Property  | Type             | Default                     | Required
 
 Please see `libraries/constants.rb` for valid types and limits. More
 documentation on domain, type, item, and value can be found at the
-following [man page][3].
+following [man page][5].
 
 ### Action: `create` (default)
 
@@ -162,6 +164,8 @@ limit 'delete example' do
 end
 ```
 
-[1]: https://supermarket.chef.io/cookbooks/limits
-[2]: https://github.com/jrwesolo/limits
-[3]: https://linux.die.net/man/5/limits.conf
+[1]: https://github.com/jrwesolo/limits/actions/workflows/ci.yml/badge.svg?branch=main
+[2]: https://github.com/jrwesolo/limits/actions/workflows/ci.yml
+[3]: https://supermarket.chef.io/cookbooks/limits
+[4]: https://github.com/jrwesolo/limits
+[5]: https://linux.die.net/man/5/limits.conf

@@ -1,0 +1,152 @@
+---
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly, so that upstream drift is caught without waiting for someone to
+  # push. The suites track Cinc major versions and the dokken base images move
+  # underneath those tags, so a green main can go red with no change here.
+  # Only the test jobs run: version is pull-request-only, and release and
+  # publish are push-only, so a scheduled run can never tag or ship anything.
+  schedule:
+    - cron: '0 12 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Pull request runs share a group per ref, so a new push cancels the run it
+  # supersedes. Pushes to main get a group to themselves instead of queueing
+  # behind one another: the publish job holds its run open while it waits for a
+  # deployment approval, pending approvals live for thirty days, and a shared
+  # group would park every later merge behind an unapproved release.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-cinc
+      - name: Cookstyle
+        run: cinc exec cookstyle
+
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-cinc
+      - name: RSpec
+        run: cinc exec rspec
+
+  # Pull requests only. On main the premise is inverted: once a release is
+  # tagged, metadata.rb keeps that version until the next bump, so "the version
+  # is not yet tagged" is false for every merge that follows a release.
+  version:
+    name: version
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check the version is unreleased and documented
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.base_ref }}
+        run: .github/scripts/check-version
+
+  discover:
+    name: discover instances
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      instances: ${{ steps.list.outputs.instances }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-cinc
+      # Derive the integration matrix from kitchen.yml itself so suites and
+      # platforms only ever have to be declared in one place.
+      - name: Collect Test Kitchen instances
+        id: list
+        run: |
+          instances="$(cinc exec kitchen list --json | jq -c '[.[].instance]')"
+          echo "Found instances: ${instances}"
+          echo "instances=${instances}" >> "${GITHUB_OUTPUT}"
+
+  integration:
+    name: ${{ matrix.instance }}
+    needs: [lint, unit, discover]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ fromJSON(needs.discover.outputs.instances) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-cinc
+      # Policyfile.lock.json is not committed, so resolve it before Test Kitchen
+      # exports the policy into the dokken sandbox.
+      - name: Resolve Policyfile
+        run: cinc-cli install
+      # Destroy unconditionally rather than only on success. The runner is
+      # ephemeral so it changes nothing here, but it keeps the command correct
+      # if these ever move to a self-hosted runner that outlives the job.
+      - name: Test Kitchen
+        run: cinc exec kitchen test --destroy always ${{ matrix.instance }}
+
+  # Merges to main only, and only once everything else is green. The release is
+  # idempotent: if metadata.rb still names an already-tagged version, as it does
+  # for every merge between releases, the script publishes nothing and exits 0.
+  # This is the mirror image of the version job, which fails a pull request when
+  # the tag already exists.
+  release:
+    name: release
+    needs: [lint, unit, integration]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag and publish the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/release
+
+  # Runs after release rather than alongside it, because Supermarket checks at
+  # share time that the repository carries a tag for the version being shared.
+  # Publishing first would fail that quality metric permanently for the version.
+  #
+  # Gated on the supermarket environment, which requires a human to approve the
+  # deployment before the job starts. That approval is what keeps the long-lived
+  # Supermarket key unreadable to any workflow change that has not been looked
+  # at. The `released` check means a merge that ships no new version never asks
+  # for an approval, so the notification stays meaningful.
+  publish:
+    name: publish
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: supermarket
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-cinc
+      - name: Share to Supermarket
+        env:
+          SUPERMARKET_USER: ${{ vars.SUPERMARKET_USER }}
+          SUPERMARKET_KEY: ${{ secrets.SUPERMARKET_KEY }}
+        run: .github/scripts/publish

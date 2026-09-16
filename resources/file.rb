@@ -1,6 +1,9 @@
-unified_mode true if Chef::VERSION.to_f >= 15.3
+unified_mode true
 
-resource_name :limits_file # backwards-compatibility for Chef < 16
+# Both names match what Chef derives from the cookbook and filename
+# (limits + file.rb). They are declared anyway so the public DSL name is
+# stated outright rather than being an accident of the filename.
+resource_name :limits_file
 provides :limits_file
 
 property :path, String, name_property: true

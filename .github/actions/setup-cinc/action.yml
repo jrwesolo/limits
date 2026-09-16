@@ -1,0 +1,21 @@
+---
+name: Set up Cinc Workstation
+description: Installs a pinned Cinc Workstation from the Cinc omnitruck endpoint.
+
+inputs:
+  version:
+    description: >-
+      Cinc Workstation version to install. The default is pinned so that CI
+      matches the version documented in TESTING.md, and so that a new upstream
+      release cannot turn every pull request red on its own.
+    required: false
+    default: 26.2.4
+
+runs:
+  using: composite
+  steps:
+    - name: Install Cinc Workstation ${{ inputs.version }}
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: curl -fsSL https://omnitruck.cinc.sh/install.sh | sudo bash -s -- -P cinc-workstation -v "${VERSION}"

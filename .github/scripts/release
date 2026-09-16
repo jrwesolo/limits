@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#
+# Tags the current commit and publishes a GitHub release for the version in
+# metadata.rb, using that version's changelog section as the release notes.
+#
+# Idempotent by design: if the version is already tagged the script exits 0
+# without publishing, so a merge that does not bump the version is a no-op.
+# This is the mirror image of check-version, which fails a pull request when
+# the tag already exists.
+#
+# Expects GITHUB_REPOSITORY, GITHUB_SHA and GH_TOKEN in the environment. Run it
+# from the root of a checkout.
+
+set -euo pipefail
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
+
+: "${GITHUB_REPOSITORY:?must be set to owner/repo}"
+: "${GITHUB_SHA:?must be set to the commit to tag}"
+
+version="$(cookbook_version)"
+if [[ -z ${version} ]]; then
+  echo "::error file=metadata.rb::Could not parse the version."
+  exit 1
+fi
+
+tag="v${version}"
+
+if tag_exists "${tag}"; then
+  echo "${tag} is already tagged, nothing to release."
+  set_output released=false
+  exit 0
+fi
+
+notes="$(changelog_notes "${tag}")"
+if [[ -z ${notes} ]]; then
+  echo "::error file=CHANGELOG.md::No changelog section found for ${tag}."
+  exit 1
+fi
+
+echo "Releasing ${tag} at ${GITHUB_SHA}"
+printf '%s\n' "${notes}" | gh release create "${tag}" \
+  --target "${GITHUB_SHA}" \
+  --title "${tag}" \
+  --notes-file -
+
+# Publishing to Supermarket keys off this rather than repeating the tag check,
+# so that a merge which releases nothing does not queue a deployment approval.
+set_output released=true
