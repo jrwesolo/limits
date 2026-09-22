@@ -119,9 +119,14 @@ describe Limits::Entry do
     end
 
     it 'treats fields it cannot compare as equal rather than raising' do
-      # A nil domain reaches this from an entry built for a lookup, where
-      # only some of the fields are known.
-      expect(entry(nil) <=> entry('a')).to eq(0)
+      # Ruby cannot order an Integer against a String, and an entry takes
+      # whichever it is handed: the resources always pass strings, but a
+      # caller writing a uid domain as a number does not have to. This is
+      # the defensive branch rather than an everyday one.
+      numeric = Limits::Entry.new(1000, 'hard', 'nofile', 10)
+      named = Limits::Entry.new('ftp', 'hard', 'nofile', 10)
+
+      expect(numeric <=> named).to eq(0)
     end
 
     it 'orders a list of entries' do

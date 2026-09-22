@@ -5,6 +5,25 @@ module Limits
       (val.is_a?(String) && val =~ /^-?\d++$/) ? val.to_i : val
     end
 
+    # True when the given field can be written into a limits file and read
+    # back as the same field.
+    def self.valid_field?(val)
+      Limits::FIELD.match?(val.to_s)
+    end
+
+    # Raises unless the given field can survive a round trip. The resources
+    # ask the same question through valid_field? and report it as a property
+    # validation failure, which is what a user should ever see. This guards
+    # the point past which bad input stops being recoverable, and covers
+    # anything reaching the library another way.
+    def self.validate_field!(name, val)
+      return val if valid_field?(val)
+
+      raise ArgumentError,
+            "#{name} #{val.inspect} cannot be written to a limits file: a " \
+            "field cannot be empty or contain whitespace or '#'"
+    end
+
     # Removing leading '#' and optional space from each line.
     def self.normalize_comment(comment)
       return unless comment

@@ -10,11 +10,17 @@ module Limits
                 :comment
 
     def initialize(domain, type, item, value = nil, comment = nil)
-      @domain = domain
-      @type = type
-      @item = item
+      @domain = Limits::Helpers.validate_field!(:domain, domain)
+      @type = Limits::Helpers.validate_field!(:type, type)
+      @item = Limits::Helpers.validate_field!(:item, item)
       @value = Limits::Helpers.normalize_value(value)
       @comment = Limits::Helpers.normalize_comment(comment)
+
+      # A missing value is not bad input. It is how the rest of the
+      # cookbook asks a question rather than states a fact: both
+      # load_current_value and the delete action build an entry that names
+      # a limit without saying what it should be.
+      Limits::Helpers.validate_field!(:value, @value) unless @value.nil?
     end
 
     def id

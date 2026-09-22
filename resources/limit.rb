@@ -12,11 +12,19 @@ property :path,
          identity: true,
          callbacks: { 'should not be empty' => ->(x) { !x.empty? } }
 
+# The field callbacks ask the same question Limits::Entry raises on, so
+# that a user sees a property validation failure naming the property
+# rather than an error out of the library. A field carrying whitespace or
+# a '#' cannot be written into a limits file and read back: the parser
+# here and pam_limits both split fields on whitespace and end the line at
+# a '#', so such a limit is silently dropped or silently altered.
+field = { 'should not contain whitespace or #' => ->(x) { Limits::Helpers.valid_field?(x) } }
+
 property :domain,
          String,
          required: true,
          identity: true,
-         callbacks: { 'should not be empty' => ->(x) { !x.empty? } }
+         callbacks: { 'should not be empty' => ->(x) { !x.empty? } }.merge(field)
 
 property :type,
          String,
@@ -34,7 +42,7 @@ property :value,
          [Integer, String],
          required: [:create],
          coerce: proc { |x| Limits::Helpers.normalize_value(x) },
-         callbacks: { 'should not be empty' => ->(x) { !x.to_s.empty? } }
+         callbacks: { 'should not be empty' => ->(x) { !x.to_s.empty? } }.merge(field)
 
 property :comment,
          String,

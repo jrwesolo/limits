@@ -11,10 +11,8 @@ require_relative '../spec_helper'
 #
 # Limits::REGEX requires each of the four fields to be [^\s#]++, and the
 # possessive quantifiers mean there is no backtracking to rescue a line
-# with an extra field in it. Nothing upstream enforces that. Both resources
-# constrain type and item with equal_to, but domain and value are only
-# checked for being non-empty, so any string with a space or a '#' in it
-# reaches Limits::Entry intact.
+# with an extra field in it. Limits::Entry refuses a field that cannot
+# match, and the resources ask the same question as property validation.
 #
 # There is no valid input this rejects. limits.conf is read a line at a
 # time with getline and has no continuation syntax, the first three fields
@@ -22,9 +20,7 @@ require_relative '../spec_helper'
 # a field carrying either character cannot describe a limit in the first
 # place.
 #
-# These specs state the invariant. They fail today.
-#
-# They live apart from the mirror specs because none of them is a fact
+# These specs live apart from the mirror specs because none of them is a fact
 # about a single class. Entry formats, REGEX parses and File rewrites, and
 # each failure below appears only in the seam between them.
 describe 'Writing a limits file and reading it back' do
