@@ -1,8 +1,13 @@
 module Limits
   module Helpers
-    # Convert value into integer if applicable
+    # Convert value into integer if applicable. The anchors are \A and \z
+    # rather than ^ and $, which in Ruby match at line boundaries: a value
+    # carrying a newline would otherwise match on one of its lines and be
+    # coerced as a whole, turning "foo\n10" into 0 and "10\nfoo" into 10.
+    # Such a value is rejected as a field instead, since limits.conf has no
+    # line continuation and no value can span lines.
     def self.normalize_value(val)
-      (val.is_a?(String) && val =~ /^-?\d++$/) ? val.to_i : val
+      (val.is_a?(String) && val.match?(/\A-?\d+\z/)) ? val.to_i : val
     end
 
     # True when the given field can be written into a limits file and read
