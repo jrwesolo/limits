@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Installs a pinned Cinc Workstation, reusing a previously downloaded package
+# when one is present.
+#
+# The omnitruck installer keeps the package it fetches when it is given a
+# download directory with -d, and on a later run it finds the file there and
+# verifies its checksum rather than downloading again. That directory is what
+# the calling action caches, so a cache hit skips the download and leaves only
+# the dpkg install to do.
+#
+# Expects VERSION and CACHE_DIR in the environment.
+
+set -euo pipefail
+
+: "${VERSION:?must be set to the Cinc Workstation version to install}"
+: "${CACHE_DIR:?must be set to the directory the package is cached in}"
+
+# Created here rather than left to the installer, which makes it with umask
+# 077 as root. The runner user has to own it for the cache to be saved.
+mkdir -p "${CACHE_DIR}"
+
+curl -fsSL https://omnitruck.cinc.sh/install.sh |
+  sudo bash -s -- -P cinc-workstation -v "${VERSION}" -d "${CACHE_DIR}"
+
+# The package itself is still written as root, and actions/cache runs as the
+# runner user, so without this the save step cannot read what it is caching.
+sudo chown -R "$(id -u):$(id -g)" "${CACHE_DIR}"
+
+ls -lh "${CACHE_DIR}"

@@ -14,8 +14,22 @@ inputs:
 runs:
   using: composite
   steps:
+    # The package, not the installed tree. /opt/cinc-workstation is far larger
+    # than the package it came from, and restoring it would also mean putting
+    # back what dpkg records and links outside of it.
+    #
+    # The version is in the key rather than in restore-keys, because a package
+    # for a different version is of no use: the installer would ignore it and
+    # download the one it was asked for anyway.
+    - name: Cache the Cinc Workstation package
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/cinc-workstation
+        key: cinc-workstation-${{ runner.os }}-${{ runner.arch }}-${{ inputs.version }}
+
     - name: Install Cinc Workstation ${{ inputs.version }}
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
-      run: curl -fsSL https://omnitruck.cinc.sh/install.sh | sudo bash -s -- -P cinc-workstation -v "${VERSION}"
+        CACHE_DIR: ${{ runner.temp }}/cinc-workstation
+      run: .github/scripts/install-cinc
