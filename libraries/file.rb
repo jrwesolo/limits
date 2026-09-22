@@ -58,7 +58,15 @@ module Limits
     # Construct file with entries that are available. Entries with
     # comments will be surrounded by empty lines for readability.
     def to_s
-      str = "# #{@path}\n#\n# This file is managed by Chef\n# Local changes may be lost!\n"
+      # The path goes through format_comment rather than into a string with
+      # a '#' in front of it, because a filename may carry a newline: Linux
+      # allows any byte but '/' and NUL, and pam_limits reads the files it
+      # globs regardless. Written by hand, such a name would end the comment
+      # and stand the rest of itself up as a line of its own, which reads
+      # back as a limit nobody declared.
+      str = Limits::Helpers.format_comment(
+        "#{@path}\n\nThis file is managed by Chef\nLocal changes may be lost!"
+      )
 
       last_had_comment = true
       @entries.sort.each do |entry|
