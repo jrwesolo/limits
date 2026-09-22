@@ -50,17 +50,23 @@
 
   // The Cinc Workstation version CI installs. It is a plain input default
   // rather than anything a package manager knows about, so the comment above
-  // it in action.yml is what marks it as a dependency.
+  // it is what marks it as a dependency.
   //
-  // TESTING.md records the same version by hand and is deliberately not
-  // matched here: the block it sits in also lists the client, auditor and CLI
-  // versions that come with whatever Workstation is installed, and only a
-  // person running the tools can fill those in.
+  // TESTING.md states the same version, so it carries the same marker and is
+  // updated in the same pull request: both resolve to one dependency at one
+  // version, which Renovate puts on a single branch.
+  //
+  // The pattern is deliberately shape-agnostic, "the marker line, then the
+  // first version on the next line", so that it reads a YAML comment and a
+  // Markdown comment without caring which file it is in.
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^\\.github/actions/setup-cinc/action\\.yml$/"],
-      "matchStrings": ["# renovate: cinc-workstation\\s+default:\\s*(?<currentValue>\\S+)"],
+      "managerFilePatterns": [
+        "/^\\.github/actions/setup-cinc/action\\.yml$/",
+        "/^TESTING\\.md$/"
+      ],
+      "matchStrings": ["renovate: cinc-workstation[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "datasourceTemplate": "custom.cinc-workstation",
       "depNameTemplate": "cinc-workstation",
       "versioningTemplate": "semver"
