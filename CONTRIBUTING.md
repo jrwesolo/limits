@@ -102,7 +102,21 @@ documentation-only pull requests are unaffected.
 
 The integration matrix is generated from `kitchen.yml` at runtime, so
 adding a platform or a Cinc major version there is picked up with no
-workflow edit.
+workflow edit. Each instance reports its own status check, named after
+the instance, and those names change whenever `kitchen.yml` does.
+
+Because of that, the branch ruleset requires a check named
+**integration** that is not one of those instances. It is a gate job that
+waits for the whole matrix and fails unless every instance succeeded, so
+the four required checks, `lint`, `unit`, `version` and `integration`,
+stay correct no matter which platforms are being tested. GitHub has no
+pattern matching for required checks, and a required name that stops
+reporting blocks every pull request until someone edits the ruleset, so
+requiring the instances by name would turn a platform bump into a
+settings change.
+
+`release` and `publish` must stay out of the required list. They only
+run on pushes to `main`, so they would never report on a pull request.
 
 Pull requests
 -------------

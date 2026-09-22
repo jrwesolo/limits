@@ -103,6 +103,33 @@ jobs:
       - name: Test Kitchen
         run: cinc exec kitchen test --destroy always ${{ matrix.instance }}
 
+  # One status check with a stable name, so that a branch ruleset can require
+  # the integration suites without naming each instance of a matrix that is
+  # generated from kitchen.yml at runtime. GitHub has no pattern matching for
+  # required checks, and a required name that stops reporting, which is what
+  # dropping a platform does, blocks every pull request until the ruleset is
+  # edited.
+  #
+  # `if: always()` is what makes it a usable gate. Without it the job would be
+  # skipped along with whatever failed, and a required check that never
+  # reports leaves a pull request unmergeable rather than red.
+  #
+  # discover is in needs as well as integration, because a matrix that never
+  # ran reports as skipped rather than as failed, and that must not read as
+  # everything having passed.
+  integration-gate:
+    name: integration
+    needs: [discover, integration]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check every integration instance passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: .github/scripts/check-needs
+
   # Merges to main only, and only once everything else is green. The release is
   # idempotent: if metadata.rb still names an already-tagged version, as it does
   # for every merge between releases, the script publishes nothing and exits 0.
