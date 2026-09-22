@@ -2,6 +2,16 @@ require 'spec_helper'
 
 describe Limits::Helpers do
   describe '.normalize_value' do
+    # The multi-line cases fail today. The match is anchored with ^ and $,
+    # which in Ruby bind to line boundaries rather than to the ends of the
+    # string, so a value with a newline in it can match on one of its lines
+    # and then be coerced as a whole:
+    #
+    #   normalize_value("10\nfoo") # => 10,  the rest of the value is lost
+    #   normalize_value("foo\n10") # => 0,   String#to_i gives up at 'f'
+    #
+    # Neither value is numeric, so both should come back untouched and be
+    # written as-is, which is what the round trip specs then reject.
     values = {
       'One' => 'One',
       '1' => 1,
@@ -11,6 +21,9 @@ describe Limits::Helpers do
       '-1' => -1,
       1.0 => 1.0,
       nil => nil,
+      "10\nfoo" => "10\nfoo",
+      "foo\n10" => "foo\n10",
+      "10\n" => "10\n",
     }
 
     values.each do |value, expected|
