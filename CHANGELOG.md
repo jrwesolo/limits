@@ -1,6 +1,14 @@
 limits cookbook CHANGELOG
 =========================
 
+[v3.0.1]
+--------
+
+* Ship `CHANGELOG.md` in the published cookbook, so that Supermarket
+  renders it as the Changelog tab on the cookbook page. Along with the
+  README it is one of only two files Supermarket reads out of the
+  tarball
+
 [v3.0.0]
 --------
 
@@ -135,6 +143,7 @@ limits be able to be specified using attributes. Please see the
 
 * Initial release of limits
 
+[v3.0.1]: https://github.com/jrwesolo/limits/tree/v3.0.1
 [v3.0.0]: https://github.com/jrwesolo/limits/tree/v3.0.0
 [v2.4.1]: https://github.com/jrwesolo/limits/tree/v2.4.1
 [v2.4.0]: https://github.com/jrwesolo/limits/tree/v2.4.0
