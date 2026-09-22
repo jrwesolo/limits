@@ -37,7 +37,7 @@ Where things live
 | --- | --- |
 | `libraries/` | Plain Ruby classes that do the parsing and formatting |
 | `resources/` | The `limits_file` and `limit` custom resources |
-| `spec/` | RSpec tests for the library classes |
+| `spec/libraries/` | RSpec tests for the library classes |
 | `test/fixtures/cookbooks/limits_test/` | Wrapper cookbook the suites converge |
 | `test/integration/` | InSpec controls that assert the result |
 | `.github/workflows/` | The pipeline: tests on every pull request, release and publish on merges to `main` |
@@ -45,12 +45,25 @@ Where things live
 | `.github/actions/setup-cinc/` | Composite action that installs and caches the pinned Cinc Workstation |
 | `AGENTS.md` | Conventions worth reading before changing any of the above |
 
-There are no ChefSpec tests, deliberately. The custom resources read
-and write the real filesystem at converge time, so stepping into them
-under ChefSpec would touch the host's own
-`/etc/security/limits.conf`. Resource behavior is covered by the
-integration suites instead, and the specs exercise the library classes
-directly.
+Specs mirror the library one file each, named after the class or
+constant they cover, with one exception. `spec/libraries/writable_spec.rb`
+holds the rules that belong to no single class: what may be written into
+a limits file, and what has to come back when it is read again. The test
+for where a new spec goes is whether it can be stated as a fact about one
+class without naming another. If it can, it goes in the mirror file. If
+the failure only shows up when two classes meet, usually by writing a
+file and parsing it again, it goes in `writable_spec.rb`.
+
+There are no ChefSpec tests, deliberately, on cost rather than on
+safety. Stepping into a resource is opt-in, so a plain ChefSpec run
+would only assert that a resource was declared with certain properties,
+which for a cookbook that ships no recipes tests the fixture cookbook
+rather than this one. Stepping in would converge the resources for
+real, and they read and write whichever path they are handed, so every
+such spec would have to point at a tmpdir to stay away from the host's
+own `/etc/security/limits.conf`. Neither is worth the price while the
+logic lives in `libraries/` and these specs run in milliseconds.
+Resource behavior is covered by the integration suites instead.
 
 Versioning
 ----------

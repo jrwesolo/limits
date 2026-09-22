@@ -1,4 +1,4 @@
-require 'spec_helper'
+require_relative '../spec_helper'
 
 describe Limits::File do
   let(:file_stub) do
@@ -16,9 +16,6 @@ describe Limits::File do
       invalid limit
       user5 - cpu 50
     EOF
-  end
-
-  let(:existing_file) do
   end
 
   context 'Using new file' do
@@ -54,7 +51,7 @@ describe Limits::File do
       end
     end
 
-    context 'With change (only 1 limit)' do
+    context 'With one limit added' do
       before do
         subject.add(Limits::Entry.new('apple', 'soft', 'nproc', '10'))
       end
@@ -83,6 +80,16 @@ describe Limits::File do
 
           # End of file (1 limit)
         EOF
+      end
+
+      # The only path by which anything in this cookbook reaches disk
+      # outside of Chef's own file resource. Both limit actions call it, so
+      # it is worth pinning that it writes the rendered file to the path it
+      # was built with and nowhere else.
+      it '#write!' do
+        expect(::File).to receive(:write).with('limits.conf', subject)
+
+        subject.write!
       end
     end
 
@@ -121,6 +128,37 @@ describe Limits::File do
           # End of file (2 limits)
         EOF
       end
+    end
+  end
+
+  context 'Using an existing but empty file' do
+    # What a limits.d file looks like after someone empties it by hand, and
+    # what every file looks like the first time limits_file manages one
+    # that was created by something else.
+    subject { Limits::File.new('limits.conf') }
+
+    before do
+      allow(::File).to receive(:exist?).with('limits.conf').and_return(true)
+      allow(::File).to receive(:read).with('limits.conf').and_return('')
+    end
+
+    it '#count' do
+      expect(subject.count).to eq(0)
+    end
+
+    it '#columns' do
+      expect(subject.columns).to be_empty
+    end
+
+    it '#to_s' do
+      expect(subject.to_s).to eq(<<~'EOF')
+        # limits.conf
+        #
+        # This file is managed by Chef
+        # Local changes may be lost!
+
+        # End of file (0 limits)
+      EOF
     end
   end
 
@@ -167,6 +205,20 @@ describe Limits::File do
 
           # End of file (5 limits)
         EOF
+      end
+    end
+
+    context 'With a delete that matches nothing' do
+      # The :delete action of the limit resource reaches this whenever it
+      # runs against a limit that is not in the file, which is the ordinary
+      # case once the limit has been removed one time.
+      it 'leaves the file alone' do
+        before_delete = subject.to_s
+
+        subject.delete(Limits::Entry.new('nobody', 'hard', 'nofile'))
+
+        expect(subject.count).to eq(5)
+        expect(subject.to_s).to eq(before_delete)
       end
     end
 
