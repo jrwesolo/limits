@@ -81,3 +81,16 @@ limit 'add a limit with a word value' do
   value 'unlimited'
   comment 'Values are not all numbers'
 end
+
+# nonewprivs is a boolean rather than a size or a count, and it is one of
+# the items this cookbook accepts that not every pam_limits understands.
+# Converging it proves the resource writes the item, which is all this
+# cookbook is responsible for; whether the module honors it is a question
+# about the pam on the node.
+limit 'add a boolean item' do
+  path '/etc/security/limits.d/400_created.conf'
+  domain 'kitchen'
+  type 'hard'
+  item 'nonewprivs'
+  value 1
+end

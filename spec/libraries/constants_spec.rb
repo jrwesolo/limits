@@ -186,3 +186,67 @@ describe Limits::REGEX do
     end
   end
 end
+
+# The allowlist the limit resource validates its item property against, so
+# what is in it decides which limits this cookbook can express at all. An
+# item missing from here is not a limit a user can set by any other means.
+describe 'Limits::ITEMS' do
+  subject { Limits::ITEMS }
+
+  it 'is frozen' do
+    expect(subject).to be_frozen
+  end
+
+  it 'is sorted, so a new item lands where a reader looks for it' do
+    expect(subject).to eq(subject.sort)
+  end
+
+  it 'has no duplicates' do
+    expect(subject.uniq).to eq(subject)
+  end
+
+  # An item goes into a limits file as the third field, so anything that
+  # fails FIELD here would be accepted by the resource and then raise out
+  # of Limits::Entry, which is the error a user should never see.
+  it 'contains only fields that can be written and read back' do
+    expect(subject.reject { |item| Limits::Helpers.valid_field?(item) }).to be_empty
+  end
+
+  # Transcribed from the man page named in constants.rb. Stated as a
+  # literal list rather than derived, so that adding an item to ITEMS
+  # without checking it against the documentation fails here.
+  it 'covers every item the man page documents' do
+    documented = %w(
+      as core cpu data fsize locks maxlogins maxsyslogins memlock msgqueue
+      nice nofile nonewprivs nproc priority rss rtprio rttime sigpending
+      stack
+    )
+
+    expect(subject).to include(*documented)
+  end
+
+  # The one item here that upstream does not have. Worth an example of its
+  # own so that removing it is a deliberate act rather than a tidy-up.
+  it "carries Debian's chroot, which the man page does not document" do
+    expect(subject).to include('chroot')
+  end
+end
+
+describe 'Limits::TYPES' do
+  subject { Limits::TYPES }
+
+  it 'is frozen' do
+    expect(subject).to be_frozen
+  end
+
+  # '-' sets both the soft and the hard limit. It is a type like the other
+  # two rather than a placeholder, and dropping it would silently turn
+  # every combined limit in an existing file into an invalid one.
+  it 'is exactly the three types the man page defines' do
+    expect(subject).to match_array(%w(- hard soft))
+  end
+
+  it 'contains only fields that can be written and read back' do
+    expect(subject.reject { |type| Limits::Helpers.valid_field?(type) }).to be_empty
+  end
+end

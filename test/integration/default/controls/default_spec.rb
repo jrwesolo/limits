@@ -216,9 +216,28 @@ control 'created-file' do
       expect(subject).to include('# This file is managed by Chef')
     end
 
-    it 'counts the one limit it holds' do
-      expect(subject).to match(/# End of file \(1 limit\)/)
+    it 'counts the limits it holds' do
+      expect(subject).to match(/# End of file \(2 limits\)/)
     end
+  end
+end
+
+control 'boolean-item' do
+  impact 1.0
+  title 'nonewprivs is written like any other item'
+  desc <<~DESC
+    nonewprivs takes 0 or 1 rather than a size or a count, and it is one of
+    the items this cookbook accepts that an older pam_limits does not know.
+    Of the platforms tested here every one carries a pam new enough, since
+    the item landed in Linux-PAM 1.5.0.
+
+    What is asserted is that the resource writes the line. Whether the
+    module acts on it is a property of the pam installed on the node, which
+    this cookbook does not and should not inspect.
+  DESC
+
+  describe limits_conf('/etc/security/limits.d/400_created.conf') do
+    its('kitchen') { should include %w(hard nonewprivs 1) }
   end
 end
 

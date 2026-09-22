@@ -29,7 +29,7 @@ touches covers one behavior, and the numeric prefix names it:
 | `limits.d/100_unpurged.conf` | yes | `limits_file :create` | a managed file whose unmanaged limits survive |
 | `limits.d/200_unmanaged.conf` | no | nothing, only a `limit` | a file created by a limit with no `limits_file` |
 | `limits.d/300_deleted.conf` | yes | `limits_file :delete` | the delete action |
-| `limits.d/400_created.conf` | no | `limits_file :create` | building a file from nothing, and a word value |
+| `limits.d/400_created.conf` | no | `limits_file :create` | building a file from nothing, a word value, and a boolean item |
 
 `limits.conf` is seeded with limits no resource declares, an unparseable
 line and a comment attached to nothing, so the purge, the rewrite and the
@@ -40,8 +40,9 @@ since nothing but a `limit` resource touches it, and the profile pins the
 mode it ends up with to keep that visible. `300_deleted.conf` has to be
 seeded or the test would assert that a file nobody created is absent.
 `400_created.conf` is the only file the create action builds rather than
-adopts, and it carries a value of `unlimited` so that a non-numeric value
-is covered end to end.
+adopts. It carries a value of `unlimited` so that a non-numeric value is
+covered end to end, and a `nonewprivs` limit, which is an item that takes
+a flag rather than a size and that an older `pam_limits` does not know.
 
 Seeding happens once per container, not once per converge. The seeds
 declare `action :nothing` and are notified by a marker file at
