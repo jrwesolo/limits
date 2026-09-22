@@ -27,6 +27,9 @@ platforms:
   - name: rockylinux-9
     driver:
       image: dokken/rockylinux-9
+  - name: rockylinux-10
+    driver:
+      image: dokken/rockylinux-10
   - name: fedora-43
     driver:
       image: dokken/fedora-43
