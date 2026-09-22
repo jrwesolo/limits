@@ -1,0 +1,48 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "America/Denver",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "packageRules": [
+    {
+      "description": "One pull request for everything. There are two actions and one toolchain pin in this repository, so separate pull requests would be noise and three CI runs rather than one.",
+      "matchPackageNames": [
+        "*"
+      ],
+      "groupName": "all updates"
+    }
+  ],
+  "customDatasources": {
+    "cinc-workstation": {
+      "description": "Cinc Workstation releases, as omnitruck reports them. The endpoint answers with a bare JSON array of version strings, so it is reshaped into the releases list Renovate expects.",
+      "defaultRegistryUrlTemplate": "https://omnitruck.cinc.sh/stable/cinc-workstation/versions/all",
+      "format": "json",
+      "transformTemplates": [
+        "{\"releases\": $map($, function($v) { {\"version\": $v} })}"
+      ]
+    }
+  },
+  "customManagers": [
+    {
+      "description": "The Cinc Workstation version CI installs. It is a plain input default rather than anything a package manager knows about, so the comment above it is what marks it as a dependency.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/actions/setup-cinc/action\\.yml$/"
+      ],
+      "matchStrings": [
+        "# renovate: cinc-workstation\\s+default:\\s*(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "custom.cinc-workstation",
+      "depNameTemplate": "cinc-workstation",
+      "versioningTemplate": "semver"
+    }
+  ]
+}

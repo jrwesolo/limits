@@ -9,6 +9,7 @@ inputs:
       matches the version documented in TESTING.md, and so that a new upstream
       release cannot turn every pull request red on its own.
     required: false
+    # renovate: cinc-workstation
     default: 26.2.4
 
 runs:
