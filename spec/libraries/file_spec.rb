@@ -266,4 +266,68 @@ describe Limits::File do
       end
     end
   end
+
+  context 'Using an existing file with CRLF line endings' do
+    # Exotic on Linux but reachable: a limits.d file edited over Samba, or
+    # rendered from a template that carries Windows endings.
+    #
+    # The consequence is out of all proportion to the cause. Limits::REGEX
+    # ends its line at '$', and with CRLF the position after the value sits
+    # in front of a '\r' rather than in front of the '\n', so the match
+    # fails. It fails selectively, which is worse than failing outright: a
+    # line carrying an inline comment still matches, because '\#.*+' eats
+    # the '\r' on its way to the end of the line. So a CRLF file parses as
+    # some of its limits rather than none, every other limit looks absent,
+    # and the next write drops them.
+    #
+    # Silently dropping limits from a file Chef was asked to manage is the
+    # worst thing this cookbook can do, so the endings are normalized on
+    # read and the file is rewritten with LF.
+    subject { Limits::File.new('limits.conf') }
+
+    let(:crlf_stub) do
+      <<~'EOF'.gsub("\n", "\r\n")
+        # a comment for user1
+        user1 hard nofile 1024
+        user2 soft nproc 20 # inline
+      EOF
+    end
+
+    before do
+      allow(::File).to receive(:exist?).with('limits.conf').and_return(true)
+      allow(::File).to receive(:read).with('limits.conf').and_return(crlf_stub)
+    end
+
+    it 'finds every limit in the file' do
+      expect(subject.count).to eq(2)
+    end
+
+    it 'keeps an existing limit findable' do
+      expect(subject.index(Limits::Entry.new('user1', 'hard', 'nofile'))).to_not be_nil
+    end
+
+    it 'does not carry a carriage return into a field' do
+      expect(subject.map(&:value)).to eq([1024, 20])
+    end
+
+    it '#to_s' do
+      expect(subject.to_s).to eq(<<~'EOF')
+        # limits.conf
+        #
+        # This file is managed by Chef
+        # Local changes may be lost!
+
+        # a comment for user1
+        user1    hard    nofile    1024
+
+        user2    soft    nproc     20
+
+        # End of file (2 limits)
+      EOF
+    end
+
+    it 'writes the file back with LF endings only' do
+      expect(subject.to_s).to_not include("\r")
+    end
+  end
 end

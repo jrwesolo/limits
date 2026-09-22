@@ -139,24 +139,29 @@ describe Limits::REGEX do
       expect(parse("user hard nofile 1024\n")).to include(value: '1024')
     end
 
-    # Worth stating because the consequence is out of all proportion to the
-    # cause. A '\r' is whitespace, so it falls outside the value capture,
-    # and the '$' then has a stray character in front of it. Every line of
-    # a CRLF file fails the same way, so the file parses as no limits at
-    # all: every managed limit looks absent, and every unmanaged line is
-    # erased the next time the file is written.
+    # This is an LF grammar, and stating that here is the reason
+    # Limits::File normalizes CRLF before it scans. A '\r' is whitespace,
+    # so it falls outside the value capture, and the '$' then has a stray
+    # character in front of it.
     #
-    # Exotic on Linux, but reachable through an editor on Windows or a
-    # template rendered with CRLF endings. Pinned as known behaviour rather
-    # than endorsed.
+    # The failure is not uniform, which is what makes normalizing the right
+    # answer rather than an optional kindness. A line with an inline
+    # comment still matches, because '\#.*+' consumes the '\r' on its way
+    # to the end of the line. So a CRLF file handed straight to this regex
+    # yields some of its limits and not others, and the rest would be
+    # dropped the next time the file was written.
     it 'does not parse a line with CRLF endings' do
       expect(parse("user hard nofile 1024\r\n")).to be_nil
     end
 
-    it 'finds nothing at all in a CRLF file' do
-      contents = "user1 hard nofile 1024\r\nuser2 soft nproc 20\r\n"
+    it 'parses a CRLF line that carries an inline comment' do
+      expect(parse("user hard nofile 1024 # note\r\n")).to include(value: '1024')
+    end
 
-      expect(contents.scan(Limits::REGEX)).to be_empty
+    it 'finds only the commented limit in a CRLF file' do
+      contents = "user1 hard nofile 1024\r\nuser2 soft nproc 20 # note\r\n"
+
+      expect(contents.scan(Limits::REGEX).map { |m| m[1] }).to eq(%w(user2))
     end
   end
 

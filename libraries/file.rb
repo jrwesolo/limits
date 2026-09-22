@@ -10,7 +10,15 @@ module Limits
       @entries = []
 
       if ::File.exist?(path)
-        ::File.read(path).scan(Limits::REGEX) do |match|
+        # Limits::REGEX is an LF grammar: it ends a line at '$', which sits
+        # in front of a '\n' and not in front of the '\r' of a CRLF pair.
+        # Left alone, a file written with Windows endings parses as only
+        # those of its limits that carry an inline comment, since '\#.*+'
+        # consumes the '\r' where nothing else does, and the rest are
+        # dropped the next time the file is written. Normalizing here rather
+        # than loosening the grammar keeps one definition of a line, and the
+        # file is rewritten with LF.
+        ::File.read(path).gsub("\r\n", "\n").scan(Limits::REGEX) do |match|
           groups = Hash[::Limits::REGEX.names.zip(match)]
 
           # remove end newline on comment for formatting
