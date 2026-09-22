@@ -8,6 +8,8 @@
   "schedule": [
     "before 6am on monday"
   ],
+  "semanticCommits": "disabled",
+  "configMigration": true,
   "labels": [
     "dependencies"
   ],
