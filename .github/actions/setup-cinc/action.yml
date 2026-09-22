@@ -14,21 +14,17 @@ inputs:
 runs:
   using: composite
   steps:
-    # The runner image, not just the operating system. Every Ubuntu release
-    # gets its own build of the package under the same filename, so a key of
+    # The platform, not just the operating system. Every Ubuntu release gets
+    # its own build of the package under the same filename, so a key of
     # Linux-X64 alone would hand a 24.04 package to a 26.04 runner the day
     # ubuntu-latest moves. The installer would find the name, skip the
     # download, fail the checksum against the metadata for the new release,
     # and exit rather than fetching the right one, leaving every job red until
     # somebody edited this key.
-    #
-    # Read through a step output rather than straight from the env context, so
-    # that a missing value shows up in the log as unknown instead of silently
-    # collapsing the key back to the ambiguous one.
-    - name: Identify the runner image
-      id: image
+    - name: Identify the runner platform
+      id: platform
       shell: bash
-      run: printf 'os=%s\n' "${ImageOS:-unknown}" >> "${GITHUB_OUTPUT}"
+      run: ${{ github.action_path }}/platform
 
     # The package, not the installed tree. /opt/cinc-workstation is far larger
     # than the package it came from, and restoring it would also mean putting
@@ -41,7 +37,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ${{ runner.temp }}/cinc-workstation
-        key: cinc-workstation-${{ steps.image.outputs.os }}-${{ runner.arch }}-${{ inputs.version }}
+        key: cinc-workstation-${{ steps.platform.outputs.id }}-${{ runner.arch }}-${{ inputs.version }}
 
     - name: Install Cinc Workstation ${{ inputs.version }}
       shell: bash
