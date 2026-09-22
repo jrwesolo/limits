@@ -135,9 +135,16 @@ jobs:
   # for every merge between releases, the script publishes nothing and exits 0.
   # This is the mirror image of the version job, which fails a pull request when
   # the tag already exists.
+  #
+  # Depends on the gate rather than on the matrix directly, so that whether the
+  # integration suites passed is decided in one place, by check-needs, for both
+  # the ruleset and the release. Inheriting the gate's `if: always()` is safe as
+  # long as the gate keeps failing on anything other than success, since a
+  # dependent job runs only when its dependency succeeded. A gate made advisory
+  # would silently let a release out on a red matrix.
   release:
     name: release
-    needs: [lint, unit, integration]
+    needs: [lint, unit, integration-gate]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
