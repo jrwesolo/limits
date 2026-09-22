@@ -6,8 +6,20 @@ Limits Cookbook
 This cookbook is used to configure limits for the `pam_limits` module.
 By default, the configuration file is located at
 `/etc/security/limits.conf`. It can also configure limits in any
-arbitrary path such as files in the directory `/etc/security/limit.d`.
+arbitrary path such as files in the directory `/etc/security/limits.d`.
 It is available on the [Chef Supermarket][3] or [GitHub][4].
+
+Requirements
+============
+
+Chef Infra Client 18 or newer and older than 20, or the equivalent Cinc
+Client release. No gems or other cookbooks are required.
+
+Any platform whose `pam_limits` reads `/etc/security/limits.conf` and
+`/etc/security/limits.d`, which in practice means Linux. The cookbook
+declares support for CentOS, Debian, Fedora, RedHat, Rocky and Ubuntu, and
+is tested on Debian 13, Fedora 43, Rocky Linux 9, Rocky Linux 10 and
+Ubuntu 24.04.
 
 Usage
 =====
@@ -113,20 +125,82 @@ Custom Resource: `limit`
 
 This resource is used to manage a specific limit in a limits file. The
 `limits_file` resource is not required to be used in conjunction with
-this resource, but they do compliment each other.
+this resource, but they do complement each other.
 
-Property  | Type             | Default                     | Required
---------- | ---------------- | --------------------------- | --------
-`path`    | String           | `/etc/security/limits.conf` | No
-`domain`  | String           | *none*                      | Yes
-`type`    | *see note below* | *none*                      | Yes
-`item`    | *see note below* | *none*                      | Yes
-`value`   | Integer, String  | *none*                      | Yes
-`comment` | String           | *none*                      | No
+Property  | Type            | Default                     | Required
+--------- | --------------- | --------------------------- | --------
+`path`    | String          | `/etc/security/limits.conf` | No
+`domain`  | String          | *none*                      | Yes
+`type`    | String          | *none*                      | Yes
+`item`    | String          | *none*                      | Yes
+`value`   | Integer, String | *none*                      | Yes
+`comment` | String          | *none*                      | No
 
-Please see `libraries/constants.rb` for valid types and limits. More
-documentation on domain, type, item, and value can be found at the
-following [man page][5].
+`type` and `item` are checked against the tables below and the run fails
+on anything else.
+
+More documentation on domain, type, item, and value can be found at the
+[limits.conf man page][5].
+
+### Valid types
+
+Type   | Meaning
+------ | -------------------------------------------------------------
+`soft` | The limit in force, which a user may raise up to the hard limit
+`hard` | The ceiling the soft limit cannot be raised past
+`-`    | Sets both the soft and the hard limit at once
+
+### Valid items
+
+Item           | Meaning
+-------------- | ------------------------------------------------------
+`as`           | Address space limit (KB)
+`chroot`       | Change root to directory
+`core`         | Maximum core file size (KB)
+`cpu`          | Maximum CPU time (minutes)
+`data`         | Maximum data size (KB)
+`fsize`        | Maximum file size (KB)
+`locks`        | Maximum number of file locks
+`maxlogins`    | Maximum number of logins for this user
+`maxsyslogins` | Maximum number of logins on the system
+`memlock`      | Maximum locked-in-memory address space (KB)
+`msgqueue`     | Maximum memory used by POSIX message queues (bytes)
+`nice`         | Maximum nice priority allowed to raise to
+`nofile`       | Maximum number of open file descriptors
+`nonewprivs`   | `0` or `1`; `1` disables acquiring new privileges
+`nproc`        | Maximum number of processes
+`priority`     | The priority to run the user's processes with
+`rss`          | Maximum resident set size (KB), ignored since Linux 2.4.30
+`rtprio`       | Maximum realtime priority for non-privileged processes
+`rttime`       | Timeout for real-time tasks (microseconds)
+`sigpending`   | Maximum number of pending signals
+`stack`        | Maximum stack size (KB)
+
+Three of these are not available everywhere, and the resource does not
+check: `pam_limits` logs an unknown item and skips the line, so setting
+one writes a limit a newer module will honor rather than failing the run.
+Which `pam_limits` is installed on a node is the operator's business.
+
+Item         | Available in
+------------ | ---------------------------------------------------------
+`chroot`     | Debian and Ubuntu only. A distribution patch rather than an upstream item, so it is absent from the man page
+`nonewprivs` | Linux-PAM 1.5.0 and newer, released November 2020
+`rttime`     | Linux-PAM 1.7.1 and newer, released June 2025, so still ahead of most distributions
+
+A value is a number, or one of `-1`, `unlimited` and `infinity` for no
+limit, which the man page allows for every item except `priority`,
+`nice` and `nonewprivs`. The resource does not check a value against its
+item. No field may be empty or contain whitespace or a `#`, because
+`pam_limits` splits a line on whitespace and ends it at a `#`, so such a
+limit could not be read back from the file it was written to.
+
+That includes a group whose name has a space in it, which `pam_limits`
+has no way to name: there is no quoting or escaping in limits.conf, so
+`@domain users` is read as the domain `@domain` followed by a type of
+`users`. Groups like this usually come from a directory service. On a
+node that resolves them through SSSD, the `override_space` option in
+`sssd.conf` replaces the space with another character, and the group can
+then be named that way, as `@domain_users`.
 
 ### Action: `create` (default)
 
@@ -168,4 +242,4 @@ end
 [2]: https://github.com/jrwesolo/limits/actions/workflows/pipeline.yml
 [3]: https://supermarket.chef.io/cookbooks/limits
 [4]: https://github.com/jrwesolo/limits
-[5]: https://linux.die.net/man/5/limits.conf
+[5]: https://man7.org/linux/man-pages/man5/limits.conf.5.html
