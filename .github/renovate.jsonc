@@ -1,0 +1,69 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // pinGitHubActionDigests is the point of the whole arrangement. Actions are
+  // referenced by commit SHA rather than by tag, because a tag is mutable and
+  // these workflows carry a Supermarket signing key: whoever controls an
+  // action can move v7 to point at anything, and nothing in a diff would show
+  // it. This preset rewrites the SHA and the trailing version comment
+  // together, so the readable version never drifts from the pin.
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+
+  "timezone": "America/Denver",
+  "schedule": ["before 6am on monday"],
+
+  // Stated rather than left to detection. Renovate infers the style from
+  // history, and this repository writes plain imperative subjects, so it
+  // should land here by itself. Saying so means a change in how detection
+  // works cannot start writing chore(deps) subjects into a log that has never
+  // had them, which matters because pull requests are squashed and the title
+  // becomes the subject on main.
+  "semanticCommits": "disabled",
+
+  // Raises a pull request when Renovate renames a configuration field rather
+  // than quietly falling back to the deprecated one. Not hypothetical:
+  // managerFilePatterns below is a recent rename of fileMatch.
+  "configMigration": true,
+
+  "labels": ["dependencies"],
+
+  "packageRules": [
+    {
+      // One pull request for everything. There are two actions and one
+      // toolchain pin here, so separate pull requests would be noise and
+      // three CI runs rather than one.
+      "matchPackageNames": ["*"],
+      "groupName": "all updates"
+    }
+  ],
+
+  // Cinc Workstation releases, as omnitruck reports them. The endpoint
+  // answers with a bare JSON array of version strings, so it is reshaped
+  // into the releases list Renovate expects.
+  "customDatasources": {
+    "cinc-workstation": {
+      "defaultRegistryUrlTemplate": "https://omnitruck.cinc.sh/stable/cinc-workstation/versions/all",
+      "format": "json",
+      "transformTemplates": ["{\"releases\": $map($, function($v) { {\"version\": $v} })}"]
+    }
+  },
+
+  // The Cinc Workstation version CI installs. It is a plain input default
+  // rather than anything a package manager knows about, so the comment above
+  // it in action.yml is what marks it as a dependency.
+  //
+  // TESTING.md records the same version by hand and is deliberately not
+  // matched here: the block it sits in also lists the client, auditor and CLI
+  // versions that come with whatever Workstation is installed, and only a
+  // person running the tools can fill those in.
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/actions/setup-cinc/action\\.yml$/"],
+      "matchStrings": ["# renovate: cinc-workstation\\s+default:\\s*(?<currentValue>\\S+)"],
+      "datasourceTemplate": "custom.cinc-workstation",
+      "depNameTemplate": "cinc-workstation",
+      "versioningTemplate": "semver"
+    }
+  ]
+}
