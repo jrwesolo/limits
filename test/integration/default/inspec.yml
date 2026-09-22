@@ -1,0 +1,21 @@
+---
+name: limits-integration
+title: limits cookbook integration tests
+maintainer: Jordan Wesolowski
+copyright: Jordan Wesolowski
+license: MIT
+version: 1.0.0
+summary: Asserts what a converge of the limits_test wrapper cookbook leaves on disk
+description: >-
+  Each file under /etc/security in these controls covers one behavior of the
+  cookbook: limits.conf covers purging and comment handling, 100_unpurged.conf
+  covers a managed file that is not purged, 200_unmanaged.conf covers a file
+  created by a limit resource with no limits_file managing it,
+  300_deleted.conf covers the delete action, and 400_created.conf covers
+  building a file from nothing along with a value that is a word rather than a
+  number. TESTING.md carries the same map in prose.
+# No supports: block on purpose. A platform-family constraint that does not
+# match is not an error in InSpec: the profile is skipped and the run still
+# reports success, so a wrong entry here silently turns the suite off. Which
+# platforms are tested is already decided by kitchen.yml, and that list is
+# what the CI matrix is generated from.

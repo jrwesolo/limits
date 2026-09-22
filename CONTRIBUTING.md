@@ -17,9 +17,10 @@ curl -fsSL https://omnitruck.cinc.sh/install.sh | sudo bash -s -- \
   -P cinc-workstation
 ```
 
-[TESTING.md][2] records the exact versions this cookbook is tested
-against. Integration tests run in containers through kitchen-dokken,
-so Docker needs to be running for those.
+[TESTING.md][2] records the version this cookbook is tested against,
+what each integration fixture covers, how to run a single Test Kitchen
+instance, and what to do when a converge will not start. Integration tests run in containers through
+kitchen-dokken, so Docker needs to be running for those.
 
 Running the tests
 -----------------
@@ -39,7 +40,7 @@ Where things live
 | `resources/` | The `limits_file` and `limit` custom resources |
 | `spec/libraries/` | RSpec tests for the library classes |
 | `test/fixtures/cookbooks/limits_test/` | Wrapper cookbook the suites converge |
-| `test/integration/` | InSpec controls that assert the result |
+| `test/integration/default/` | InSpec profile that asserts the result |
 | `.github/workflows/` | The pipeline: tests on every pull request, release and publish on merges to `main` |
 | `.github/scripts/` | What those jobs run, plus the shell library they share |
 | `.github/actions/setup-cinc/` | Composite action that installs and caches the pinned Cinc Workstation |
