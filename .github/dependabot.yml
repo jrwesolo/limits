@@ -1,0 +1,29 @@
+---
+# Actions are pinned to commit SHAs rather than to tags, because a tag is
+# mutable: whoever controls the action can move v7 to point at anything, and
+# this repository's workflows hold a Supermarket signing key. A SHA cannot be
+# moved, so an update has to arrive as a diff somebody reads.
+#
+# That trade only works if something raises those diffs, which is what this
+# file is for. Dependabot rewrites the SHA and the trailing version comment
+# together, so the readable version is never out of step with the pin.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    # For GitHub Actions, "/" means the workflows directory plus an action.yml
+    # in the root of the repository. It does not reach a composite action
+    # nested under .github/actions, so that one is listed in its own right.
+    directories:
+      - /
+      - /.github/actions/setup-cinc
+    schedule:
+      interval: weekly
+      day: monday
+    # One pull request for everything rather than one per action. There are
+    # two actions in the repository, and reviewing them together is both less
+    # noise and a smaller number of CI runs.
+    groups:
+      actions:
+        patterns:
+          - '*'

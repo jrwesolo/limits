@@ -34,7 +34,7 @@ runs:
     # another version or another release, which is worse than a miss: the
     # installer stops at the checksum instead of downloading the right one.
     - name: Cache the Cinc Workstation package
-      uses: actions/cache@v4
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/cinc-workstation
         key: cinc-workstation-${{ steps.platform.outputs.id }}-${{ runner.arch }}-${{ inputs.version }}

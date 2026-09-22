@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       - name: Cookstyle
         run: cinc exec cookstyle
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       - name: RSpec
         run: cinc exec rspec
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check the version is unreleased and documented
         env:
           GH_TOKEN: ${{ github.token }}
@@ -70,7 +70,7 @@ jobs:
     outputs:
       instances: ${{ steps.list.outputs.instances }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       # Derive the integration matrix from kitchen.yml itself so suites and
       # platforms only ever have to be declared in one place.
@@ -91,7 +91,7 @@ jobs:
       matrix:
         instance: ${{ fromJSON(needs.discover.outputs.instances) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       # Policyfile.lock.json is not committed, so resolve it before Test Kitchen
       # exports the policy into the dokken sandbox.
@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check every integration instance passed
         env:
           NEEDS: ${{ toJSON(needs) }}
@@ -153,7 +153,7 @@ jobs:
     outputs:
       released: ${{ steps.release.outputs.released }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Tag and publish the release
         id: release
         env:
@@ -177,7 +177,7 @@ jobs:
     timeout-minutes: 10
     environment: supermarket
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       - name: Share to Supermarket
         env:
