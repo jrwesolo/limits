@@ -41,10 +41,6 @@ module Limits
       @entries.at(idx)
     end
 
-    def write!
-      ::File.write(@path, self)
-    end
-
     def add(new)
       idx = index(new)
       if idx

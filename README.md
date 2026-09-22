@@ -174,10 +174,20 @@ Property  | Type            | Default                     | Required
 `type` and `item` are checked against the tables below and the run fails
 on anything else.
 
-This resource writes through Chef, so the update is atomic, but it sets no
-owner, group, mode or backup. Those belong to `limits_file`. A path managed
-only by `limit` resources keeps whatever permissions it already had, or
-takes the run's umask if the file is new, and is never backed up.
+The file is written through Chef's `file` resource, the same as
+`limits_file` writes it. A change replaces the file in one step, so
+`pam_limits` reads either the previous file or the new one, never a
+partial one. The write is not reported on its own, because this resource
+is declared once per limit rather than once per file and the limit's own
+change is already reported. One consequence is worth knowing:
+the file is replaced rather than written over, so POSIX ACLs set with
+`setfacl` are not carried across. That is equally true of every other
+file Chef manages.
+
+It sets no owner, group, mode or backup: those belong to `limits_file`. A
+path managed only by `limit` resources keeps whatever permissions it
+already had, or takes the run's umask if the file is new, and is never
+backed up.
 
 More documentation on domain, type, item, and value can be found at the
 [limits.conf man page][5].

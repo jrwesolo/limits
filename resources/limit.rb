@@ -83,9 +83,9 @@ action :create do
       derived_comment
     )
 
-    file = Limits::File.new(new_resource.path)
-    file.add(entry)
-    file.write!
+    limits = Limits::File.new(new_resource.path)
+    limits.add(entry)
+    write_limits(limits)
   end
 end
 
@@ -98,9 +98,46 @@ action :delete do
         current_resource.item
       )
 
-      file = Limits::File.new(current_resource.path)
-      file.delete(entry)
-      file.write!
+      limits = Limits::File.new(current_resource.path)
+      limits.delete(entry)
+      write_limits(limits)
     end
+  end
+end
+
+action_class do
+  # Hand the rendered file to Chef's file resource rather than writing it
+  # here.
+  #
+  # Run rather than declared, against a run context whose event dispatcher
+  # has nothing subscribed to it, the way Chef runs a guard resource in
+  # Chef::GuardInterpreter::ResourceGuardInterpreter. A limit is declared
+  # once per limit, so a declared file resource would print one diff of the
+  # whole file per limit, and converge_if_changed already reports the
+  # change a reader cares about.
+  #
+  # The context gets clone(freeze: false) of the node. Not the node itself,
+  # because RunContext#node= reassigns node.run_context and would leave the
+  # rest of the run pointing here (chef/chef#3485). Not a dup, because dup
+  # drops the singleton class, where ChefSpec defines the #runner method its
+  # run_action calls, so step_into on this resource would raise. And
+  # freeze: false so that a node a recipe has frozen still yields a
+  # writable copy, since RunContext#node= writes to it.
+  # docs/agents/chef-resources.md has the longer account.
+  #
+  # backup false, and no owner, group or mode. This resource writes the
+  # whole file once per limit, and permissions and backups belong to
+  # limits_file.
+  def write_limits(limits)
+    quiet_run_context = Chef::RunContext.new(
+      node.clone(freeze: false),
+      {},
+      Chef::EventDispatch::Dispatcher.new
+    )
+
+    written = Chef::Resource::File.new(limits.path, quiet_run_context)
+    written.content(limits.to_s)
+    written.backup(false)
+    written.run_action(:create)
   end
 end

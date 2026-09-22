@@ -81,16 +81,6 @@ describe Limits::File do
           # End of file (1 limit)
         EOF
       end
-
-      # The only path by which anything in this cookbook reaches disk
-      # outside of Chef's own file resource. Both limit actions call it, so
-      # it is worth pinning that it writes the rendered file to the path it
-      # was built with and nowhere else.
-      it '#write!' do
-        expect(::File).to receive(:write).with('limits.conf', subject)
-
-        subject.write!
-      end
     end
 
     context 'With changes' do

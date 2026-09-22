@@ -147,10 +147,10 @@ control 'unmanaged-file' do
   impact 0.5
   title '200_unmanaged.conf is created by the limit resource alone'
   desc <<~DESC
-    Nothing seeds this file and no limits_file resource manages it, so it is
-    created by Limits::File#write! rather than by Chef's file resource. That
-    means no owner, group or mode is enforced on it and the mode comes from
-    the umask of the client run.
+    Nothing seeds this file and no limits_file resource manages it, so the
+    limit resource is the only thing that writes it. That write sets no
+    owner, group or mode, so a file it creates takes the umask of the client
+    run, and a file that already exists keeps the permissions it had.
 
     The impact is lower than the rest because this control documents a gap
     rather than a guarantee. A file only gets managed permissions if a
