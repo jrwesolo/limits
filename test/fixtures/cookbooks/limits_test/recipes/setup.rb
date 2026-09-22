@@ -8,11 +8,18 @@
 # the default recipe has something to delete. Without it the
 # integration test asserts that a file nobody ever created is
 # absent, which passes whether or not the action works.
+#
+# 500_purged.conf is seeded with limits no resource declares and
+# with the same wrong ownership and mode as the rest, because the
+# purge action manages it without a create action alongside. It
+# is the only file that proves what :purge does to a file's
+# permissions on its own.
 
 files_for_setup = %w(
   /etc/security/limits.conf
   /etc/security/limits.d/100_unpurged.conf
   /etc/security/limits.d/300_deleted.conf
+  /etc/security/limits.d/500_purged.conf
 )
 
 files_for_setup.each do |path|

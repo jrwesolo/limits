@@ -254,3 +254,43 @@ control 'created-word-value' do
     its('kitchen') { should include %w(hard nofile unlimited) }
   end
 end
+
+control 'purged-only-file' do
+  impact 1.0
+  title '500_purged.conf is purged by an action that does not create it'
+  desc <<~DESC
+    Every other managed file in this suite has a create or a delete action
+    on it, so the purge action is never asked to own a file by itself. This
+    one is managed by :purge alone.
+
+    The seed is laid down with the same wrong owner and mode as the rest,
+    so the ownership and mode asserted here can only have come from the
+    purge action. Purge reaches disk through Chef's file resource for the
+    same reason create does: it is the action that removes configuration
+    somebody else wrote, and doing that without honoring backup, or without
+    leaving a content diff in the run, is the wrong way round.
+  DESC
+
+  describe file('/etc/security/limits.d/500_purged.conf') do
+    it { should exist }
+    its('owner') { should eq 'root' }
+    its('group') { should eq 'root' }
+    its('mode') { should cmp '0640' }
+  end
+
+  describe limits_conf('/etc/security/limits.d/500_purged.conf') do
+    its('kitchen') { should be_nil }
+  end
+
+  describe 'the purged 500_purged.conf' do
+    subject { file('/etc/security/limits.d/500_purged.conf').content }
+
+    it 'is rewritten in the cookbook format' do
+      expect(subject).to include('# This file is managed by Chef')
+    end
+
+    it 'has nothing left in it' do
+      expect(subject).to match(/# End of file \(0 limits\)/)
+    end
+  end
+end

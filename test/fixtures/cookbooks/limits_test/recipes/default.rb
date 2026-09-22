@@ -94,3 +94,12 @@ limit 'add a boolean item' do
   item 'nonewprivs'
   value 1
 end
+
+# Purge a file without creating it. Every other limits_file here either
+# creates or deletes, so without this the purge action is never asked to
+# manage a file's ownership and mode on its own. The seed is laid down
+# with the wrong owner and mode on purpose.
+limits_file '/etc/security/limits.d/500_purged.conf' do
+  mode '0640'
+  action :purge
+end

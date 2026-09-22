@@ -30,6 +30,7 @@ touches covers one behavior, and the numeric prefix names it:
 | `limits.d/200_unmanaged.conf` | no | nothing, only a `limit` | a file created by a limit with no `limits_file` |
 | `limits.d/300_deleted.conf` | yes | `limits_file :delete` | the delete action |
 | `limits.d/400_created.conf` | no | `limits_file :create` | building a file from nothing, a word value, and a boolean item |
+| `limits.d/500_purged.conf` | yes | `limits_file :purge` | purging a file with no create action beside it |
 
 `limits.conf` is seeded with limits no resource declares, an unparseable
 line and a comment attached to nothing, so the purge, the rewrite and the
@@ -43,6 +44,10 @@ seeded or the test would assert that a file nobody created is absent.
 adopts. It carries a value of `unlimited` so that a non-numeric value is
 covered end to end, and a `nonewprivs` limit, which is an item that takes
 a flag rather than a size and that an older `pam_limits` does not know.
+`500_purged.conf` is the only file managed by `:purge` on its own, which
+is what proves the purge action maintains ownership and mode rather than
+leaving whatever the file already had; like the other seeds it is laid
+down with the wrong owner and mode on purpose.
 
 Seeding happens once per container, not once per converge. The seeds
 declare `action :nothing` and are notified by a marker file at

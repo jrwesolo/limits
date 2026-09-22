@@ -85,6 +85,27 @@ Property | Type                | Default           | Required
 `mode`   | String, Integer     | `0644`            | No
 `backup` | Integer, FalseClass | `false`           | No
 
+### Backups
+
+`backup` is the number of copies Chef keeps when **this resource** changes
+the file, or `false` to keep none. It is worth knowing which writes that
+covers, because it is fewer than it looks.
+
+The `create` action renders the file from what is already on disk, so it
+changes the file on the first converge, when it reformats, and rarely
+again: on later runs it reads the file, renders the same bytes, and has
+nothing to write. The `purge` action changes the file every time it
+removes a limit. So in practice `backup` is a purge feature, which is
+also the action where a copy of the previous file is worth the most.
+
+Writes made by the `limit` resource are never backed up, and that resource
+has no `backup` property. It rewrites the whole file once per limit, so
+twenty limits on one path is twenty writes in one run. Backups assume a
+resource that writes a file once; keeping them here would leave nineteen
+snapshots of half-applied state and push the one useful pre-run copy out
+of the retention window. Point a `limits_file` at the path if you want the
+file's writes backed up.
+
 ### Action: `create` (default)
 
 This action will create the desired limits file. The file will be
@@ -99,6 +120,20 @@ This action will remove any limits in the limits file that were not
 configured via Chef. This is useful if you want to ensure that a limits
 file is completely managed by Chef and any manually-added limits are
 removed.
+
+A limit counts as configured via Chef when a `limit` resource declaring
+it appears anywhere in the run with the same `path`, whichever recipe
+declared it. The resource collection is what is consulted, not the file,
+so it makes no difference whether that `limit` has converged yet or
+converges at all: a limit declared with `action :nothing` is left alone
+on the runs where nothing notifies it, rather than being removed and
+written back the next time it fires.
+
+When it removes something it rewrites the file through Chef, so `backup`
+is honored and owner, group, and mode are maintained the same way the
+`create` action maintains them. A file with nothing to purge is left
+alone rather than reformatted, since this action was not asked to create
+anything.
 
 ### Action: `delete`
 
@@ -138,6 +173,11 @@ Property  | Type            | Default                     | Required
 
 `type` and `item` are checked against the tables below and the run fails
 on anything else.
+
+This resource writes through Chef, so the update is atomic, but it sets no
+owner, group, mode or backup. Those belong to `limits_file`. A path managed
+only by `limit` resources keeps whatever permissions it already had, or
+takes the run's umask if the file is new, and is never backed up.
 
 More documentation on domain, type, item, and value can be found at the
 [limits.conf man page][5].
