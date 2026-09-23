@@ -23,12 +23,20 @@ set -euo pipefail
 
 failed=0
 
+# Into a variable rather than straight into the loop. Read from a process
+# substitution, a jq that cannot parse its input yields no lines at all, the
+# loop counts no failures, and the gate reports every job as having succeeded
+# on input it never read. Assigning it means set -e sees the failure.
+results="$(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"${NEEDS}")"
+
 # Fed by redirection rather than by a pipeline, which would run the loop in a
-# subshell and lose the count.
+# subshell and lose the count. A here string on an empty result yields one
+# empty line, which is a needs context with nothing in it rather than a job.
 while read -r job result; do
+  [[ -n ${job} ]] || continue
   printf '%-24s %s\n' "${job}" "${result}"
   [[ ${result} == success ]] || failed=1
-done < <(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"${NEEDS}")
+done <<<"${results}"
 
 if ((failed)); then
   echo "::error::One or more required jobs did not succeed."
