@@ -78,7 +78,13 @@ module Limits
     def self.unformat_comment(comment)
       return unless comment
 
-      normalize_comment(comment.lines.map { |line| line.sub(/\A#[ \t]?/, '') }.join)
+      text = normalize_comment(comment.lines.map { |line| line.sub(/\A#[ \t]?/, '') }.join)
+
+      # A marker with nothing after it is no comment at all. Read back as
+      # '', it would reach the comment property through load_current_value
+      # and fail the property's own check, and format_comment would write
+      # it out as a blank line rather than a comment.
+      text unless text.empty?
     end
 
     # Ensure each line of comment starts with '#' followed by a space if

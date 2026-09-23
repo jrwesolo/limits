@@ -261,6 +261,55 @@ describe 'Writing a limits file and reading it back' do
       expect(parsed.at(0).comment).to eq(comment)
     end
 
+    # A '#' with nothing after it, directly above a limit, is a comment
+    # with no text. The comment property refuses an empty string, and
+    # load_current_value assigns whatever the file yields to that property,
+    # so reading one back as '' fails the converge of any limit it sits
+    # above. Written back out, '' is also a blank line rather than a
+    # comment, so the file does not settle until the second rewrite.
+    context 'With a comment marker and no text above a limit' do
+      let(:contents) { "#\nkitchen soft nofile 1024\n" }
+
+      before do
+        allow(::File).to receive(:exist?).with(path).and_return(true)
+        allow(::File).to receive(:read).with(path) { contents }
+      end
+
+      it 'reads back as no comment at all' do
+        expect(Limits::File.new(path).at(0).comment).to be_nil
+      end
+
+      it 'settles on the first rewrite' do
+        first = Limits::File.new(path).to_s
+        allow(::File).to receive(:read).with(path).and_return(first)
+
+        expect(Limits::File.new(path).to_s).to eq(first)
+      end
+    end
+
+    # A comment whose own lines start with a '#', some of them indented,
+    # as written by hand. Exactly one marker comes off each line on the way
+    # in, so the nested markers and the indentation in front of them are
+    # the comment's own text, and the file writes back unchanged.
+    context 'With nested comment markers already in the file' do
+      let(:comment) { "# This is a test\n# # nested comment\n#     # further nested" }
+      let(:contents) { "#{comment}\nkitchen soft nofile 1024\n" }
+
+      before do
+        allow(::File).to receive(:exist?).with(path).and_return(true)
+        allow(::File).to receive(:read).with(path) { contents }
+      end
+
+      it 'reads back every marker after the first as text' do
+        expect(Limits::File.new(path).at(0).comment)
+          .to eq("This is a test\n# nested comment\n    # further nested")
+      end
+
+      it 'writes every line back as it was' do
+        expect(Limits::File.new(path).to_s).to include("\n#{comment}\n")
+      end
+    end
+
     # These take the route a converge takes. The comment property coerces
     # what a user writes through normalize_comment, the create action hands
     # the coerced value to an entry, and load_current_value compares that
