@@ -123,6 +123,36 @@ is clean when it is not. If a local result disagrees with this pipeline,
 run it again before believing either. The runners do not share files this
 way, so nothing here is affected.
 
+What Renovate cannot see
+------------------------
+
+Everything pinned here is tracked, and `check-renovate` fails when that
+stops being true in either direction: a file carrying a marker that yields
+no dependency, or a file pinning a digest that Renovate does not track.
+What neither rule reaches is a version with no distinctive shape to search
+for.
+
+The platform images in `kitchen.yml` are the case that matters. They are
+named `dokken/debian-13`, `dokken/fedora-43` and so on, so the release is
+part of the repository name rather than a tag, and the only tag is the
+implicit `latest`. Renovate moves tags and digests, so there is nothing
+here for it to move, and a custom manager would not help. The weekly
+scheduled run catches those images changing underneath their names, which
+is what it is for, but it cannot tell you that a new Fedora or Debian
+exists. Adding a platform stays something somebody notices upstream and
+decides to do.
+
+Cinc Workstation itself is tracked, through a custom datasource against the
+omnitruck version list, and the marker sits in both `action.yml` and
+`TESTING.md` so the documented version cannot drift from the installed one.
+The Cinc client majors in the kitchen suites are a different thing and are
+outside Renovate: they are floating major tags, no datasource knows which
+lines are current, and raising the floor is a major release rather than a
+bump. That pair is enforced instead of tracked. A suite running a client
+outside the `chef_version` constraint in `metadata.rb` fails at converge,
+because Chef validates the running version against the cookbook's metadata
+and raises before any recipe runs.
+
 Script or composite action
 --------------------------
 
