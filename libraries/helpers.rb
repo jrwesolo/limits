@@ -64,6 +64,12 @@ module Limits
     # A comment whose own text begins with a '#' therefore survives: it is
     # written as '# # note' and read back as '# note'.
     #
+    # Whitespace in front of the marker is layout rather than text. This
+    # cookbook always writes the marker in the first column, so only a line
+    # edited by hand carries any, and '  # note' means the comment 'note'.
+    # Read as text instead, the indentation would keep the marker from
+    # coming off, and the line would be rewritten as '#   # note'.
+    #
     # Anchored with \A rather than '^', which in Ruby matches at every line
     # boundary. Each line is already separate here, so the two behave alike
     # today, but only by accident of the call site: handed a whole comment,
@@ -78,7 +84,7 @@ module Limits
     def self.unformat_comment(comment)
       return unless comment
 
-      text = normalize_comment(comment.lines.map { |line| line.sub(/\A#[ \t]?/, '') }.join)
+      text = normalize_comment(comment.lines.map { |line| line.sub(/\A[ \t]*#[ \t]?/, '') }.join)
 
       # A marker with nothing after it is no comment at all. Read back as
       # '', it would reach the comment property through load_current_value

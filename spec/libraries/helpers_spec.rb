@@ -88,6 +88,8 @@ describe Limits::Helpers do
   # The inverse of format_comment, and the only place a '#' means syntax.
   # Exactly one marker comes off each line because exactly one goes on, so
   # a comment whose own text starts with a '#' comes back carrying it.
+  # Whitespace in front of the marker is layout from a hand-edited file and
+  # goes with it, while whitespace after it is the comment's own.
   describe '.unformat_comment' do
     comments = {
       '# Hello' => 'Hello',
@@ -98,6 +100,11 @@ describe Limits::Helpers do
       '# #1 priority' => '#1 priority',
       '#' => nil,
       "#\t" => nil,
+      '  # Hello' => 'Hello',
+      "\t# Hello" => 'Hello',
+      '  #   Hello' => '  Hello',
+      '  #Hello' => 'Hello',
+      "# Hello\n  # World" => "Hello\nWorld",
       "# Hello\n# World" => "Hello\nWorld",
       '# Hello  ' => 'Hello',
       nil => nil,
