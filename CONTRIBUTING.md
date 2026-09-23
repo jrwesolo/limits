@@ -66,7 +66,7 @@ version that will ship it. The format is a reference-style heading and
 a bullet list, newest first:
 
 ```markdown
-[v3.1.0]
+[vX.Y.Z]
 --------
 
 * Describe the change from the point of view of someone using the
@@ -76,7 +76,7 @@ a bullet list, newest first:
 Add the link reference at the foot of the file, alongside the others:
 
 ```markdown
-[v3.1.0]: https://github.com/jrwesolo/limits/tree/v3.1.0
+[vX.Y.Z]: https://github.com/jrwesolo/limits/tree/vX.Y.Z
 ```
 
 A major release should also carry a short paragraph above the bullets

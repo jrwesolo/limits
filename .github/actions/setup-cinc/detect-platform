@@ -12,6 +12,12 @@
 #
 # Expects GITHUB_OUTPUT in the environment, and takes OS_RELEASE to point the
 # lookup somewhere other than /etc/os-release. Run by the setup-cinc action.
+#
+# Demanded rather than tolerated, which is where this parts company with
+# set_output in the shared library. That helper lets a script be run by hand
+# outside Actions, because printing the answer is most of what those scripts
+# do. Here the output is the whole product: the cache key is built from it,
+# and a run that could not record it has produced nothing.
 
 set -euo pipefail
 
@@ -32,4 +38,4 @@ else
 fi
 
 echo "Runner platform: ${id}"
-printf 'id=%s\n' "${id}" >>"${GITHUB_OUTPUT}"
+printf 'id=%s\n' "${id}" >> "${GITHUB_OUTPUT}"

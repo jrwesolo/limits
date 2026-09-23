@@ -22,6 +22,12 @@ What is here
 | `release` | Tags a merge to `main` and writes its release notes |
 | `publish` | Shares a tagged cookbook to Supermarket |
 | `lib.bash` | Shared helpers. Sourced, never executed |
+| `detect-platform` | Prints the platform whose Cinc package the cache is keyed on |
+| `install-cinc` | Installs the pinned Cinc Workstation, reusing a cached package |
+
+The last two ship with the `setup-cinc` action and sit beside its
+`action.yml` rather than in `.github/scripts`, for the reason "The
+composite action" below gives.
 
 Fail loudly, or do not bother
 -----------------------------
