@@ -76,14 +76,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
-      # Derive the integration matrix from kitchen.yml itself so suites and
-      # platforms only ever have to be declared in one place.
       - name: Collect Test Kitchen instances
         id: list
-        run: |
-          instances="$(cinc exec kitchen list --json | jq -c '[.[].instance]')"
-          echo "Found instances: ${instances}"
-          echo "instances=${instances}" >> "${GITHUB_OUTPUT}"
+        run: .github/scripts/list-instances
 
   integration:
     name: ${{ matrix.instance }}
