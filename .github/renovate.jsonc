@@ -61,6 +61,16 @@
   // Markdown comment without caring which file it is in.
   "customManagers": [
     {
+      // The actionlint container the workflow lint runs in, marked the same
+      // way as the Cinc pin above: a marker line naming the datasource and the
+      // image, then the first version on the line below it.
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/scripts/check-workflows$/"],
+      "matchStrings": ["renovate: docker (?<depName>\\S+)[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "semver"
+    },
+    {
       "customType": "regex",
       "managerFilePatterns": [
         "/^\\.github/actions/setup-cinc/action\\.yml$/",

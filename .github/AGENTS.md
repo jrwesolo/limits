@@ -15,6 +15,8 @@ What is here
 | `check-version` | Fails a pull request proposing a version that cannot be released, or changing what would be published without a new version |
 | `list-payload` | Prints what a commit would publish, one `sha<TAB>path` line per file |
 | `list-instances` | Prints the Test Kitchen instances as a JSON array, and records it as a workflow output |
+| `check-shell` | Runs shellcheck over every tracked shell script, found by shebang rather than by a list |
+| `check-workflows` | Runs actionlint over the workflows, in a pinned container |
 | `check-needs` | Fails unless every job in a `needs` context succeeded |
 | `release` | Tags a merge to `main` and writes its release notes |
 | `publish` | Shares a tagged cookbook to Supermarket |

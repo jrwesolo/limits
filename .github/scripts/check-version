@@ -12,6 +12,7 @@
 
 set -euo pipefail
 
+# shellcheck source=.github/scripts/lib.bash
 source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 
 : "${BASE_REF:?must be set to the pull request base branch}"

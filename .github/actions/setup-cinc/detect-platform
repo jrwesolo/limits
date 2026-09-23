@@ -19,7 +19,9 @@ set -euo pipefail
 os_release="${OS_RELEASE:-/etc/os-release}"
 
 if [[ -r ${os_release} ]]; then
-  # shellcheck disable=SC1091
+  # Data, not code to follow: the warning here is SC1090, a source whose path
+  # is not constant, rather than SC1091, a file shellcheck could not find.
+  # shellcheck source=/dev/null
   . "${os_release}"
   id="${ID:-unknown}-${VERSION_ID:-unknown}"
 else

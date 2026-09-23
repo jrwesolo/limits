@@ -13,6 +13,7 @@
 
 set -euo pipefail
 
+# shellcheck source=.github/scripts/lib.bash
 source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 
 listing="$(cinc exec kitchen list --json)"

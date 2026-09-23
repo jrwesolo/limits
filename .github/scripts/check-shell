@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#
+# Runs shellcheck over every shell script in the repository.
+#
+# What counts as one is decided by looking rather than by a list: any tracked
+# file whose first line names bash, plus anything ending in .bash, which is how
+# a library meant to be sourced is spelled here since it carries no shebang of
+# its own. A list would be one more thing to remember when a script is added,
+# and the first symptom of forgetting would be a lint quietly checking less
+# than it did the day before.
+#
+# Run it from the root of a checkout.
+
+set -euo pipefail
+
+if ! command -v shellcheck >/dev/null; then
+  echo "::error::shellcheck is not installed."
+  exit 1
+fi
+
+files=()
+while IFS= read -r -d '' file; do
+  [[ -f ${file} ]] || continue
+
+  case ${file} in
+    *.bash)
+      files+=("${file}")
+      continue
+      ;;
+  esac
+
+  read -r first < "${file}" || continue
+  [[ ${first} == '#!'*bash* ]] && files+=("${file}")
+done < <(git ls-files -z)
+
+# Nothing found means the detection broke, not that the repository stopped
+# carrying scripts, and a lint that checks nothing must not report success.
+if ((${#files[@]} == 0)); then
+  echo "::error::No shell scripts found to check."
+  exit 1
+fi
+
+echo "Checking ${#files[@]} shell scripts:"
+printf '  %s\n' "${files[@]}"
+
+# -x so that a sourced library is followed and checked alongside its callers.
+shellcheck -x -s bash "${files[@]}"
