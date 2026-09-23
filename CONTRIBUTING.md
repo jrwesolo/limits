@@ -93,12 +93,17 @@ Every pull request runs:
   `kitchen.yml`, each on its own runner
 * **version**, described below
 
-The **version** job only does anything when a pull request changes the
-version in `metadata.rb`. When it does, it asserts that the new
-version is not already tagged and that it is the newest entry in
-`CHANGELOG.md` with a matching link reference. When the version is
-unchanged from the base branch, both assertions are skipped, so
-documentation-only pull requests are unaffected.
+The **version** job asserts one of two things, depending on whether the
+pull request changes the version in `metadata.rb`. When it does, the new
+version must not already be tagged, and it must be the newest entry in
+`CHANGELOG.md` with a matching link reference.
+
+When it does not, nothing the cookbook would publish may change. The job
+lists what the base branch would ship and what the pull request would
+ship, by blob hash and path, and fails when the two differ. What counts as
+published is decided by `chefignore`, so editing a file it excludes, such
+as this one or anything under `.github/`, is free. Editing `README.md`, a
+resource or a library needs a version for the change to arrive under.
 
 The integration matrix is generated from `kitchen.yml` at runtime, so
 adding a platform or a Cinc major version there is picked up with no
