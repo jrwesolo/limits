@@ -64,13 +64,21 @@
       // The containers the lint job runs, marked the same
       // way as the Cinc pin above: a marker line naming the datasource and the
       // image, then the first version on the line below it.
+      //
+      // The leading v is part of the version and has to be captured with it.
+      // A docker tag is whatever the publisher called it, and these three do
+      // not agree: shellcheck publishes v0.11.0 while actionlint publishes
+      // 1.7.12. Capturing the digits alone sent Renovate to look up a tag
+      // that does not exist, which fails as "could not determine new digest"
+      // on the dashboard rather than as anything red, so the pin silently
+      // stopped being maintained while the check here still passed.
       "customType": "regex",
       "managerFilePatterns": [
         "/^\\.github/scripts/check-renovate$/",
         "/^\\.github/scripts/check-shell$/",
         "/^\\.github/scripts/check-workflows$/"
       ],
-      "matchStrings": ["renovate: docker (?<depName>\\S+)[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)[^\\n]*\\n[^\\n]*?(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "matchStrings": ["renovate: docker (?<depName>\\S+)[^\\n]*\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+\\.\\d+)[^\\n]*\\n[^\\n]*?(?<currentDigest>sha256:[0-9a-f]{64})"],
       "datasourceTemplate": "docker",
       "versioningTemplate": "semver"
     },
