@@ -36,3 +36,15 @@ curl -fsSL https://omnitruck.cinc.sh/install.sh |
 sudo chown -R "$(id -u):$(id -g)" "${CACHE_DIR}"
 
 ls -lh "${CACHE_DIR}"
+
+# The first `cinc exec` in a home directory with no .cinc in it writes one, and
+# prints a bare newline to standard output while doing so. Every call after it
+# is clean. A runner installs Cinc fresh for each job, so that first call is
+# whichever script happens to run first, and its output arrives with a blank
+# line ahead of it. The newline comes from the wrapper before Ruby starts, so a
+# script cannot suppress it from the inside.
+#
+# Pay it here, where nothing is reading, rather than leaving every caller to
+# tolerate a line it did not print. It doubles as a check that what was just
+# installed actually runs.
+cinc exec ruby -e '' >/dev/null
