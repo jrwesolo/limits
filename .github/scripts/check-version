@@ -32,8 +32,22 @@ echo "metadata.rb: ${version} (${BASE_REF}: ${base_version})"
 # Anything a user downloads that is not identical has to arrive under a
 # version of its own, or it lands on the base branch attributed to a version
 # that was released without it.
+# Keeps only what looks like a manifest entry: a sha, a tab, a path.
+# Anything else reaching stdout is noise from the toolchain rather than
+# part of the answer, and a stray blank line compared as a difference that
+# did not exist. Assigned before filtering so that a failure to build the
+# manifest still aborts under set -e.
 manifest() {
-  "$(dirname "${BASH_SOURCE[0]}")/payload-manifest" "$1"
+  local raw line out=''
+
+  raw="$("$(dirname "${BASH_SOURCE[0]}")/payload-manifest" "$1")"
+
+  while IFS= read -r line; do
+    [[ ${line} == *$'\t'* ]] || continue
+    out+="${line}"$'\n'
+  done <<<"${raw}"
+
+  printf '%s' "${out}"
 }
 
 if [[ ${version} == "${base_version}" ]]; then
