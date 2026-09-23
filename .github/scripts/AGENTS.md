@@ -13,6 +13,7 @@ What is here
 | --- | --- |
 | `check-version` | Fails a pull request proposing a version that cannot be released, or changing what would be published without a new version |
 | `list-payload` | Prints what a commit would publish, one `sha<TAB>path` line per file |
+| `list-instances` | Prints the Test Kitchen instances as a JSON array, and records it as a workflow output |
 | `check-needs` | Fails unless every job in a `needs` context succeeded |
 | `release` | Tags a merge to `main` and writes its release notes |
 | `publish` | Shares a tagged cookbook to Supermarket |
@@ -61,6 +62,9 @@ Style
   Keep `jq` for JSON and `awk` for a range of lines between markers.
 * Executable, shebang, no extension. Runnable by hand from a checkout, so
   that a failure can be reproduced without a workflow.
+* Never interpolate an argument into a command line. Ruby's backticks and
+  `system` with one string hand it to a shell, so a ref or a filename
+  carrying a semicolon runs whatever follows it. Pass an array instead.
 * Workflow logic lives in a script or a composite action, not inline in
   YAML.
 
