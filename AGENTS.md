@@ -43,8 +43,8 @@ less than it appears to:
 * **GNU against BSD command line tools.** macOS and the BSDs ship their
   own versions, and the flags differ. `sed -i` takes a backup suffix
   argument on BSD, commonly written `-i ''`, while GNU `sed -i` takes none
-  and reads that empty string as the script instead. `date`, `readlink`
-  and `env` differ too.
+  and consumes that empty string as the script or as a filename, failing
+  either way. `date`, `readlink` and `env` differ too.
 * **Bash version.** macOS ships bash 3.2 as `/bin/bash`, so modern syntax
   cannot be exercised there, and a script that passes under 3.2 can behave
   differently under 5.
@@ -76,6 +76,27 @@ active context for the socket instead of naming a path under somebody's
 home directory, which is both private and correct on more machines. A
 relative path, an environment variable, or an obvious placeholder such as
 `/path/to/checkout` serves everywhere else.
+
+Testing
+-------
+
+Write the failing test first wherever the work allows it. A bug gets a
+test that reproduces it, seen red, before any fix exists. A feature gets
+the assertion that will hold once it works. The red run is the part worth
+having: it shows the test fails for the reason claimed, rather than
+because it was written wrong or because it is asserting nothing.
+
+Where a test has to come second, prove it the same way afterwards. Break
+the code it covers on purpose, confirm that test turns red and that the
+failure is the expected one, then restore the code and watch it go green
+again. A test never seen failing has an unknown subject, and more than one
+here has turned out to assert something other than what its name claimed.
+
+That applies to anything with a pass and a fail, not only to test suites:
+a CI check, a script, a lint rule. Exercise the case that must fail and
+the case that must pass, and be able to switch between them on demand. If
+a case cannot be made to fail, either the check is not checking what it
+says or the test belongs somewhere else.
 
 Adding to this guidance
 -----------------------
