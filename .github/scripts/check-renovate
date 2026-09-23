@@ -76,6 +76,29 @@ fi
 # dependency is covered without an edit. What neither covers is a marker
 # deleted from a dependency with no distinctive shape to search for, such as a
 # plain version string in documentation.
+# The configuration itself is excluded from both searches: it carries the
+# marker's own text inside the pattern that looks for it.
+config='^\.github/renovate\.'
+
+# Captured before either loop, rather than read from a process substitution,
+# so that a search which fails or finds nothing is a failure here. Read
+# directly into a loop, a broken search yields no iterations, nothing is
+# checked, and the check reports success.
+if ! marked="$(git grep -lE '(#|<!--) renovate:' -- . | grep -vE "${config}" | sort -u)" ||
+  [[ -z ${marked} ]]; then
+  echo "::error::No file carries a Renovate marker, so either the search or the convention changed."
+  exit 1
+fi
+
+# The shapes that actually pin something, rather than any sha256 anywhere: a
+# digest quoted in documentation is not a dependency, and demanding that
+# Renovate track it would fail the build for prose.
+if ! pinned="$(git grep -lE '(@|digest=)sha256:[0-9a-f]{64}' -- . | grep -vE "${config}" | sort -u)" ||
+  [[ -z ${pinned} ]]; then
+  echo "::error::Nothing is pinned by digest, so either the search or the convention changed."
+  exit 1
+fi
+
 missing=0
 while IFS= read -r file; do
   if grep -qxF "${file}" <<<"${extracted}"; then
@@ -84,7 +107,7 @@ while IFS= read -r file; do
     printf '::error file=%s::Carries a Renovate marker but yields no dependency.\n' "${file}"
     missing=1
   fi
-done < <(git grep -lE '(#|<!--) renovate:' -- . | grep -v '^\.github/renovate\.' | sort -u)
+done <<<"${marked}"
 
 while IFS= read -r file; do
   if grep -qxF "${file}" <<<"${extracted}"; then
@@ -93,7 +116,7 @@ while IFS= read -r file; do
     printf '::error file=%s::Pins something by digest that Renovate does not track.\n' "${file}"
     missing=1
   fi
-done < <(git grep -lE 'sha256:[0-9a-f]{64}' -- . | grep -v '^\.github/renovate\.' | sort -u)
+done <<<"${pinned}"
 
 if ((missing)); then
   exit 1
