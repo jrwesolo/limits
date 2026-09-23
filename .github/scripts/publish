@@ -94,7 +94,7 @@ case ${status} in
   404)
     ;;
   *)
-    echo "::error::Unexpected HTTP ${status} asking ${site} about ${name} ${version}."
+    echo "::error::Unexpected HTTP ${status:-no answer} asking ${site} about ${name} ${version}."
     exit 1
     ;;
 esac
