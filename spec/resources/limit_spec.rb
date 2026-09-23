@@ -97,6 +97,47 @@ describe 'limit' do
         .to run_ruby_block('recorder')
     end
 
+    # A comment is written with every line rstripped, so one carrying
+    # trailing whitespace could never equal the comment read back off disk.
+    # The property coerces to the same normalized form the parser yields,
+    # which is what keeps this from converging forever on a file it is
+    # already happy with.
+    it 'does nothing when the comment differs only by trailing whitespace' do
+      already = 'a comment belonging to the limit below'
+
+      expect(converge_limit(existing.merge(value: 1024, comment: "#{already}   ")))
+        .to_not run_ruby_block('recorder')
+    end
+
+    # A comment holds its own text. The '#' in the file belongs to the
+    # file, so giving the property the text alone matches what is already
+    # there, and giving it a '#' of its own asks for a different comment.
+    it 'does nothing when the comment matches the text already in the file' do
+      expect(converge_limit(existing.merge(value: 1024, comment: 'a comment belonging to the limit below')))
+        .to_not run_ruby_block('recorder')
+    end
+
+    it 'converges when the comment adds a hash the file does not have' do
+      expect(converge_limit(existing.merge(value: 1024, comment: '# a comment belonging to the limit below')))
+        .to run_ruby_block('recorder')
+    end
+
+    # The case that could not be expressed at all while the property took a
+    # '#' off what it was given. Nothing is refused now, and it settles.
+    context 'with a comment whose own text starts with a hash' do
+      let(:seed) do
+        <<~'LIMITS'
+          # #4127 see the ticket
+          kitchen soft nofile 1024
+        LIMITS
+      end
+
+      it 'does nothing when the file already carries it' do
+        expect(converge_limit(existing.merge(value: 1024, comment: '#4127 see the ticket')))
+          .to_not run_ruby_block('recorder')
+      end
+    end
+
     it 'converges when only the comment differs' do
       expect(converge_limit(existing.merge(value: 1024, comment: 'different words')))
         .to run_ruby_block('recorder')

@@ -53,6 +53,21 @@ describe Limits::Entry do
     end
   end
 
+  # An entry stores the comment it is handed. The '#' a file puts in front
+  # of a comment is taken off by Limits::File as it reads, so a '#' that
+  # reaches an entry belongs to the comment's own text and has to be kept.
+  context 'With a comment whose own text starts with a hash' do
+    subject { Limits::Entry.new('*', 'hard', 'nproc', '10', '# warning') }
+
+    it 'keeps the comment exactly as given' do
+      expect(subject.comment).to eq('# warning')
+    end
+
+    it '#format writes it behind a hash of its own' do
+      expect(subject.format).to eq("# # warning\n*    hard    nproc    10")
+    end
+  end
+
   context 'With no value or comment' do
     subject { Limits::Entry.new('*', 'hard', 'nproc') }
 

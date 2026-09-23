@@ -24,11 +24,14 @@ module Limits
           # remove end newline on comment for formatting
           groups['comment'].chomp! if groups['comment']
 
+          # The one place a '#' is read as syntax. Everywhere else a comment
+          # is already its own text: the comment property holds what a
+          # recipe asked for, and an entry keeps what it was handed.
           add(Limits::Entry.new(groups['domain'],
                                 groups['type'],
                                 groups['item'],
                                 groups['value'],
-                                groups['comment']))
+                                Limits::Helpers.unformat_comment(groups['comment'])))
         end
       end
     end

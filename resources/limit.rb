@@ -44,6 +44,10 @@ property :value,
          coerce: proc { |x| Limits::Helpers.normalize_value(x) },
          callbacks: { 'should not be empty' => ->(x) { !x.to_s.empty? } }.merge(field)
 
+# A comment holds its own text and nothing else. The '#' a limits file
+# puts in front of every comment line is this cookbook's to write and to
+# read, not something to spell here, so a comment that starts with one
+# keeps it: '#4127 see the ticket' is written as '# #4127 see the ticket'.
 property :comment,
          String,
          coerce: proc { |x| Limits::Helpers.normalize_comment(x) },

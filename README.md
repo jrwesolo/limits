@@ -180,6 +180,12 @@ Property  | Type            | Default                     | Required
 `type` and `item` are checked against the tables below and the run fails
 on anything else.
 
+`comment` is the comment's own text. The `#` that opens every comment
+line in a limits file is written for you, so a comment carrying one of
+its own keeps it: `comment '#4127 see the ticket'` is written as
+`# #4127 see the ticket`. A multi-line comment is written one `#` per
+line, and trailing whitespace is dropped from each of them.
+
 The file is written through Chef's `file` resource, the same as
 `limits_file` writes it. A change replaces the file in one step, so
 `pam_limits` reads either the previous file or the new one, never a

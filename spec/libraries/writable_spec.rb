@@ -232,8 +232,13 @@ describe 'Writing a limits file and reading it back' do
 
   context 'With a comment' do
     # Comments are written behind a '#', so they cannot break the line the
-    # way a bad domain does. They round trip whatever they contain, and
-    # this pins that.
+    # way a bad domain does, and nothing a comment contains is refused.
+    # What they do not round trip is trailing whitespace, which
+    # format_comment strips from every line it writes. A comment is
+    # therefore normalized to the form it will be read back in rather than
+    # rejected, which is the difference between a field, where whitespace
+    # cannot be written at all, and a comment, where it simply does not
+    # survive.
     it 'survives a comment that looks like a limit' do
       entry = Limits::Entry.new('ftp', 'hard', 'nofile', 1024, 'evil hard nofile 1')
       parsed = round_trip(entry)
@@ -254,6 +259,88 @@ describe 'Writing a limits file and reading it back' do
 
       expect(parsed.count).to eq(1)
       expect(parsed.at(0).comment).to eq(comment)
+    end
+
+    # These take the route a converge takes. The comment property coerces
+    # what a user writes through normalize_comment, the create action hands
+    # the coerced value to an entry, and load_current_value compares that
+    # value against the comment read back out of the file. A comment that
+    # does not come back as it went in is a limit converge_if_changed finds
+    # different on every run: it rewrites the file, the file comes back the
+    # same as before, and the resource never settles.
+    #
+    # The entry is handed the coerced value unchanged, as the create action
+    # hands it, so the property's coercion and the file's own reading are
+    # the only two steps between what a recipe wrote and what comes back.
+    #
+    # The last two carry a '#' in their own text, which is the case that
+    # could not be expressed at all while the property treated a leading
+    # '#' as syntax to be removed.
+    {
+      'a comment with a trailing space' => 'needs a wash ',
+      'a comment with a trailing tab' => "needs a wash\t",
+      'a comment whose earlier line has trailing whitespace' => "note  \nand more",
+      'a comment whose own text starts with a hash' => '#4127 see the ticket',
+      'a multi-line comment of hashes' => "## warning\n## again",
+    }.each do |desc, written|
+      it "round trips #{desc}" do
+        coerced = Limits::Helpers.normalize_comment(written)
+        entry = Limits::Entry.new('ftp', 'hard', 'nofile', 1024, coerced)
+        parsed = round_trip(entry)
+
+        expect(parsed.at(0).comment).to eq(coerced)
+      end
+    end
+
+    # The cases above are the ones worth naming. This covers the short ones
+    # nobody thought to name.
+    #
+    # Comments are the one field where the cookbook normalizes rather than
+    # refuses, so the form a property coerces to and the form a parsed file
+    # yields have to agree exactly, and both are built by hand out of
+    # chomp, sub, rstrip and a '#'. Reasoning about which combinations of
+    # those survive each other is what missed trailing whitespace and the
+    # doubled '#' in the first place, so this stops reasoning and tries
+    # them all.
+    #
+    # Two converges rather than one. The first proves what a limit writes
+    # can be read back; the second proves it is a fixed point, which is
+    # what makes the third run and every run after it do nothing.
+    it 'settles every comment of up to four characters that the property accepts' do
+      alphabet = ['a', ' ', "\t", "\n", '#']
+      inputs = (1..4).flat_map do |len|
+        alphabet.repeated_permutation(len).map(&:join)
+      end
+
+      contents = ''
+      allow(::File).to receive(:exist?).with(path).and_return(true)
+      allow(::File).to receive(:read).with(path) { contents }
+
+      # What a converge does with one comment, start to finish.
+      converge = lambda do |stored|
+        rendered = Limits::File.new(path)
+        rendered.add(Limits::Entry.new('kitchen', 'soft', 'nofile', 1024, stored))
+        contents = rendered.to_s
+
+        # load_current_value assigns the parsed comment to the comment
+        # property, and Chef coerces on assignment, so what
+        # converge_if_changed compares has been normalized a second time.
+        # Only rstrip runs here, and rstrip is idempotent, which is the
+        # whole reason the '#' handling lives in unformat_comment instead.
+        Limits::Helpers.normalize_comment(Limits::File.new(path).at(0).comment)
+      end
+
+      unstable = inputs.reject do |raw|
+        stored = Limits::Helpers.normalize_comment(raw)
+
+        # The only thing the comment property refuses.
+        next true if stored.nil? || stored.empty?
+
+        first = converge.call(stored)
+        first == stored && converge.call(first) == first
+      end
+
+      expect(unstable).to be_empty
     end
   end
 end

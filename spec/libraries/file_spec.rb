@@ -160,6 +160,26 @@ describe Limits::File do
       allow(::File).to receive(:read).with('limits.conf').and_return(file_stub)
     end
 
+    # Parsing is where a comment loses the '#' a file writes it with, since
+    # Limits::Entry takes a comment as given. Exactly one '#' comes off, so
+    # a comment that was written to keep one keeps it.
+    context 'With a comment carrying a hash of its own' do
+      let(:file_stub) do
+        <<~'EOF'
+          # # warning
+          user1 hard nofile 1024
+        EOF
+      end
+
+      it 'strips the hash a file writes and no more' do
+        expect(subject.at(0).comment).to eq('# warning')
+      end
+
+      it 'writes the same comment back out' do
+        expect(subject.to_s).to include("# # warning\n")
+      end
+    end
+
     context 'With no changes' do
       it '#index' do
         expect(subject.index(Limits::Entry.new('user4', '-', 'nproc'))).to_not be_nil
