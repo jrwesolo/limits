@@ -61,6 +61,8 @@ Where to look next
 | add, move or remove a test | `TESTING.md` |
 | open a pull request or cut a release | `CONTRIBUTING.md` |
 | change what the resources accept | `README.md` |
+| change how a resource writes a file | `docs/agents/chef-resources.md` |
+| write a ChefSpec spec or an integration control | `docs/agents/test-layers.md` |
 
 Keep nothing local in the repository
 ------------------------------------
