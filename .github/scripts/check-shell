@@ -13,8 +13,12 @@
 
 set -euo pipefail
 
-if ! command -v shellcheck >/dev/null; then
-  echo "::error::shellcheck is not installed."
+# renovate: docker koalaman/shellcheck
+version=v0.11.0
+digest=sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+
+if ! command -v docker >/dev/null; then
+  echo "::error::docker is required to run the pinned shellcheck."
   exit 1
 fi
 
@@ -43,5 +47,11 @@ fi
 echo "Checking ${#files[@]} shell scripts:"
 printf '  %s\n' "${files[@]}"
 
+# In a pinned container rather than against whatever the machine happens to
+# carry. The runner images ship a shellcheck of their own, and it disagreed
+# with a developer's: a finding that was clean locally failed the build, which
+# is the worst way to learn a lint is not reproducible.
+#
 # -x so that a sourced library is followed and checked alongside its callers.
-shellcheck -x -s bash "${files[@]}"
+docker run --rm --volume "${PWD}:/mnt" --workdir /mnt \
+  "koalaman/shellcheck:${version}@${digest}" -x -s bash "${files[@]}"

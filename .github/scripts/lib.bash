@@ -12,12 +12,19 @@
 
 # Prints the name declared in a cookbook metadata file, defaulting to the
 # metadata.rb in the current directory.
+#
+# The argument is optional, which is what the disable below says. Without it,
+# a function that mentions $1 and is called with nothing reads as a mistake at
+# every call site. A comment whose first word is the linter's name is itself
+# read as a directive, hence the wording here.
+# shellcheck disable=SC2120
 cookbook_name() {
   cookbook_field name "${1:-metadata.rb}"
 }
 
 # Prints the version declared in a cookbook metadata file, defaulting to the
-# metadata.rb in the current directory.
+# metadata.rb in the current directory. The argument is optional here too.
+# shellcheck disable=SC2120
 cookbook_version() {
   cookbook_field version "${1:-metadata.rb}"
 }
