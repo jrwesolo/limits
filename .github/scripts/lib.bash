@@ -46,9 +46,21 @@ cookbook_field() {
 
 # Succeeds when the given tag (including its leading v) already exists on the
 # remote. Requires GITHUB_REPOSITORY and an authenticated gh.
+#
+# A request that fails is not an answer. Reading every failure as "no such
+# tag", which is what discarding gh's output does, lets a rate limit or a
+# network blip through the check that exists to catch an already released
+# version, and sends the release job on to fail on a symptom instead. Only a
+# 404 means the tag is absent; anything else stops the caller, since neither
+# has anything useful to do with a third outcome.
 tag_exists() {
-  local tag=$1
-  gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1
+  local tag=$1 out
+  out="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" 2>&1)" && return 0
+
+  [[ ${out} == *'(HTTP 404)'* ]] && return 1
+
+  echo "::error::Could not ask GitHub whether ${tag} exists: ${out}" >&2
+  exit 1
 }
 
 # Prints the body of the changelog section for the given tag, without the
