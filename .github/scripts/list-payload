@@ -11,8 +11,15 @@
 #
 # Run through `cinc exec ruby` by the shebang, since Chef's chefignore is what
 # decides the answer and a reimplementation would be a second set of rules to
-# keep in step. `env -S` is what allows a shebang to carry more than one
-# argument.
+# keep in step. Chef's whole rule is `File.fnmatch?(glob, path)` with no flags,
+# and matching that in a shell takes more than it looks like. Two cases, from
+# comparing a bash version against this one over the tree plus dotfiles,
+# backups and odd names: `.foo~` is published, because a wildcard in Ruby will
+# not match a leading dot, and only at position 0, so `dir/.foo~` is ignored;
+# and `file.swA` is published, because `[a-z]` there is a byte range while
+# bash reads it in collation order and matches the capital. A shell version
+# drops both from the payload and says nothing. `env -S` is what allows a
+# shebang to carry more than one argument.
 #
 # git is run through the array form of IO.popen rather than through backticks,
 # so no shell sees the argument. Interpolated into a command line, a ref
