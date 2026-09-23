@@ -40,6 +40,10 @@ Where things live
 | `spec/` | RSpec tests for the library classes |
 | `test/fixtures/cookbooks/limits_test/` | Wrapper cookbook the suites converge |
 | `test/integration/` | InSpec controls that assert the result |
+| `.github/workflows/` | The pipeline: tests on every pull request, release and publish on merges to `main` |
+| `.github/scripts/` | What those jobs run, plus the shell library they share |
+| `.github/actions/setup-cinc/` | Composite action that installs and caches the pinned Cinc Workstation |
+| `AGENTS.md` | Conventions worth reading before changing any of the above |
 
 There are no ChefSpec tests, deliberately. The custom resources read
 and write the real filesystem at converge time, so stepping into them
