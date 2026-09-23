@@ -25,7 +25,7 @@ runs:
     - name: Identify the runner platform
       id: platform
       shell: bash
-      run: ${{ github.action_path }}/platform
+      run: ${{ github.action_path }}/detect-platform
 
     # The package, not the installed tree. /opt/cinc-workstation is far larger
     # than the package it came from, and restoring it would also mean putting
