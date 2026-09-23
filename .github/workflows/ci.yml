@@ -32,17 +32,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       - name: Cookstyle
         run: cinc exec cookstyle
+      # The shell scripts, the workflow and the Renovate config are what
+      # decide whether a pull request can merge, so they are linted rather
+      # than only read. Each linter runs from a container pinned by tag and
+      # digest, so that a finding is the same one a contributor gets and not
+      # an artifact of whatever version a runner image happens to carry.
+      - name: ShellCheck
+        run: .github/scripts/check-shell
+      - name: Actionlint
+        run: .github/scripts/check-workflows
+      - name: Renovate config
+        run: .github/scripts/check-renovate
 
   unit:
     name: unit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       - name: RSpec
         run: cinc exec rspec
@@ -54,9 +65,13 @@ jobs:
     name: version
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Deciding what a commit would publish means asking chefignore, through
+      # the class Chef itself uses, rather than keeping a second list of paths
+      # here that would drift.
+      - uses: ./.github/actions/setup-cinc
       - name: Check the version is unreleased and documented
         env:
           GH_TOKEN: ${{ github.token }}
@@ -70,16 +85,11 @@ jobs:
     outputs:
       instances: ${{ steps.list.outputs.instances }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
-      # Derive the integration matrix from kitchen.yml itself so suites and
-      # platforms only ever have to be declared in one place.
       - name: Collect Test Kitchen instances
         id: list
-        run: |
-          instances="$(cinc exec kitchen list --json | jq -c '[.[].instance]')"
-          echo "Found instances: ${instances}"
-          echo "instances=${instances}" >> "${GITHUB_OUTPUT}"
+        run: .github/scripts/list-instances
 
   integration:
     name: ${{ matrix.instance }}
@@ -91,7 +101,7 @@ jobs:
       matrix:
         instance: ${{ fromJSON(needs.discover.outputs.instances) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       # Policyfile.lock.json is not committed, so resolve it before Test Kitchen
       # exports the policy into the dokken sandbox.
@@ -103,14 +113,48 @@ jobs:
       - name: Test Kitchen
         run: cinc exec kitchen test --destroy always ${{ matrix.instance }}
 
+  # One status check with a stable name, so that a branch ruleset can require
+  # the integration suites without naming each instance of a matrix that is
+  # generated from kitchen.yml at runtime. GitHub has no pattern matching for
+  # required checks, and a required name that stops reporting, which is what
+  # dropping a platform does, blocks every pull request until the ruleset is
+  # edited.
+  #
+  # `if: always()` is what makes it a usable gate. Without it the job would be
+  # skipped along with whatever failed, and a required check that never
+  # reports leaves a pull request unmergeable rather than red.
+  #
+  # discover is in needs as well as integration, because a matrix that never
+  # ran reports as skipped rather than as failed, and that must not read as
+  # everything having passed.
+  integration-gate:
+    name: integration
+    needs: [discover, integration]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check every integration instance passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: .github/scripts/check-needs
+
   # Merges to main only, and only once everything else is green. The release is
   # idempotent: if metadata.rb still names an already-tagged version, as it does
   # for every merge between releases, the script publishes nothing and exits 0.
   # This is the mirror image of the version job, which fails a pull request when
   # the tag already exists.
+  #
+  # Depends on the gate rather than on the matrix directly, so that whether the
+  # integration suites passed is decided in one place, by check-needs, for both
+  # the ruleset and the release. Inheriting the gate's `if: always()` is safe as
+  # long as the gate keeps failing on anything other than success, since a
+  # dependent job runs only when its dependency succeeded. A gate made advisory
+  # would silently let a release out on a red matrix.
   release:
     name: release
-    needs: [lint, unit, integration]
+    needs: [lint, unit, integration-gate]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -119,7 +163,7 @@ jobs:
     outputs:
       released: ${{ steps.release.outputs.released }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Tag and publish the release
         id: release
         env:
@@ -143,7 +187,7 @@ jobs:
     timeout-minutes: 10
     environment: supermarket
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-cinc
       - name: Share to Supermarket
         env:

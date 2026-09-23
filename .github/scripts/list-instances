@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#
+# Prints the Test Kitchen instances as a JSON array and records it as a
+# workflow output, so that the integration matrix is derived from kitchen.yml
+# and platforms are declared in one place.
+#
+# The listing is taken into a variable before jq reads it. Piped straight in,
+# a kitchen that failed would be masked: jq exits 0 on empty input, so the
+# step would succeed with an empty output and the failure would surface later
+# as a template error in the matrix job, pointing at the wrong place.
+#
+# Expects nothing in the environment. Run it from the root of a checkout.
+
+set -euo pipefail
+
+# shellcheck source=.github/scripts/lib.bash
+source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
+
+listing="$(cinc exec kitchen list --json)"
+instances="$(jq -c '[.[].instance]' <<<"${listing}")"
+
+# An empty matrix is a kitchen.yml that declares nothing, or a listing this
+# stopped understanding. Either way the integration job would be skipped, and
+# a skipped matrix must not read as everything having passed.
+if [[ -z ${instances} || ${instances} == '[]' ]]; then
+  echo "::error file=kitchen.yml::No Test Kitchen instances to run."
+  exit 1
+fi
+
+echo "Found instances: ${instances}"
+set_output "instances=${instances}"

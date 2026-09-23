@@ -1,0 +1,89 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // pinGitHubActionDigests is the point of the whole arrangement. Actions are
+  // referenced by commit SHA rather than by tag, because a tag is mutable and
+  // these workflows carry a Supermarket signing key: whoever controls an
+  // action can move v7 to point at anything, and nothing in a diff would show
+  // it. This preset rewrites the SHA and the trailing version comment
+  // together, so the readable version never drifts from the pin.
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+
+  "timezone": "America/Denver",
+  "schedule": ["before 6am on monday"],
+
+  // Stated rather than left to detection. Renovate infers the style from
+  // history, and this repository writes plain imperative subjects, so it
+  // should land here by itself. Saying so means a change in how detection
+  // works cannot start writing chore(deps) subjects into a log that has never
+  // had them, which matters because pull requests are squashed and the title
+  // becomes the subject on main.
+  "semanticCommits": "disabled",
+
+  // Raises a pull request when Renovate renames a configuration field rather
+  // than quietly falling back to the deprecated one. Not hypothetical:
+  // managerFilePatterns below is a recent rename of fileMatch.
+  "configMigration": true,
+
+  "labels": ["dependencies"],
+
+  "packageRules": [
+    {
+      // One pull request for everything. There are two actions and one
+      // toolchain pin here, so separate pull requests would be noise and
+      // three CI runs rather than one.
+      "matchPackageNames": ["*"],
+      "groupName": "all updates"
+    }
+  ],
+
+  // Cinc Workstation releases, as omnitruck reports them. The endpoint
+  // answers with a bare JSON array of version strings, so it is reshaped
+  // into the releases list Renovate expects.
+  "customDatasources": {
+    "cinc-workstation": {
+      "defaultRegistryUrlTemplate": "https://omnitruck.cinc.sh/stable/cinc-workstation/versions/all",
+      "format": "json",
+      "transformTemplates": ["{\"releases\": $map($, function($v) { {\"version\": $v} })}"]
+    }
+  },
+
+  // The Cinc Workstation version CI installs. It is a plain input default
+  // rather than anything a package manager knows about, so the comment above
+  // it is what marks it as a dependency.
+  //
+  // TESTING.md states the same version, so it carries the same marker and is
+  // updated in the same pull request: both resolve to one dependency at one
+  // version, which Renovate puts on a single branch.
+  //
+  // The pattern is deliberately shape-agnostic, "the marker line, then the
+  // first version on the next line", so that it reads a YAML comment and a
+  // Markdown comment without caring which file it is in.
+  "customManagers": [
+    {
+      // The containers the lint job runs, marked the same
+      // way as the Cinc pin above: a marker line naming the datasource and the
+      // image, then the first version on the line below it.
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/scripts/check-renovate$/",
+        "/^\\.github/scripts/check-shell$/",
+        "/^\\.github/scripts/check-workflows$/"
+      ],
+      "matchStrings": ["renovate: docker (?<depName>\\S+)[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)[^\\n]*\\n[^\\n]*?(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/actions/setup-cinc/action\\.yml$/",
+        "/^TESTING\\.md$/"
+      ],
+      "matchStrings": ["renovate: cinc-workstation[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "datasourceTemplate": "custom.cinc-workstation",
+      "depNameTemplate": "cinc-workstation",
+      "versioningTemplate": "semver"
+    }
+  ]
+}

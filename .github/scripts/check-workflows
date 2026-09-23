@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#
+# Runs actionlint over the workflows.
+#
+# Through the published container rather than the upstream download script, so
+# that nothing is fetched and executed unverified. The runner images do not
+# carry actionlint, and the container also brings the shellcheck that
+# actionlint runs over the run blocks inside a workflow.
+#
+# This image is published by actionlint's own author rather than by Docker, so
+# it is addressed by digest as well as by tag, for the same reason the actions
+# in these workflows are pinned to commits: a tag can be repushed and nothing
+# in a diff would show it. The digest is the multi-platform index, so it
+# resolves on whatever architecture the runner turns out to be.
+#
+# Run it from the root of a checkout.
+
+set -euo pipefail
+
+# renovate: docker rhysd/actionlint
+version=1.7.12
+digest=sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+
+if ! command -v docker >/dev/null; then
+  echo "::error::docker is required to run the pinned actionlint."
+  exit 1
+fi
+
+docker run --rm --volume "${PWD}:/repo" --workdir /repo \
+  "rhysd/actionlint:${version}@${digest}" -color

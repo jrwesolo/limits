@@ -40,6 +40,10 @@ Where things live
 | `spec/` | RSpec tests for the library classes |
 | `test/fixtures/cookbooks/limits_test/` | Wrapper cookbook the suites converge |
 | `test/integration/` | InSpec controls that assert the result |
+| `.github/workflows/` | The pipeline: tests on every pull request, release and publish on merges to `main` |
+| `.github/scripts/` | What those jobs run, plus the shell library they share |
+| `.github/actions/setup-cinc/` | Composite action that installs and caches the pinned Cinc Workstation |
+| `AGENTS.md` | Conventions worth reading before changing any of the above |
 
 There are no ChefSpec tests, deliberately. The custom resources read
 and write the real filesystem at converge time, so stepping into them
@@ -62,7 +66,7 @@ version that will ship it. The format is a reference-style heading and
 a bullet list, newest first:
 
 ```markdown
-[v3.1.0]
+[vX.Y.Z]
 --------
 
 * Describe the change from the point of view of someone using the
@@ -72,7 +76,7 @@ a bullet list, newest first:
 Add the link reference at the foot of the file, alongside the others:
 
 ```markdown
-[v3.1.0]: https://github.com/jrwesolo/limits/tree/v3.1.0
+[vX.Y.Z]: https://github.com/jrwesolo/limits/tree/vX.Y.Z
 ```
 
 A major release should also carry a short paragraph above the bullets
@@ -93,16 +97,35 @@ Every pull request runs:
   `kitchen.yml`, each on its own runner
 * **version**, described below
 
-The **version** job only does anything when a pull request changes the
-version in `metadata.rb`. When it does, it asserts that the new
-version is not already tagged and that it is the newest entry in
-`CHANGELOG.md` with a matching link reference. When the version is
-unchanged from the base branch, both assertions are skipped, so
-documentation-only pull requests are unaffected.
+The **version** job asserts one of two things, depending on whether the
+pull request changes the version in `metadata.rb`. When it does, the new
+version must not already be tagged, and it must be the newest entry in
+`CHANGELOG.md` with a matching link reference.
+
+When it does not, nothing the cookbook would publish may change. The job
+lists what the base branch would ship and what the pull request would
+ship, by blob hash and path, and fails when the two differ. What counts as
+published is decided by `chefignore`, so editing a file it excludes, such
+as this one or anything under `.github/`, is free. Editing `README.md`, a
+resource or a library needs a version for the change to arrive under.
 
 The integration matrix is generated from `kitchen.yml` at runtime, so
 adding a platform or a Cinc major version there is picked up with no
-workflow edit.
+workflow edit. Each instance reports its own status check, named after
+the instance, and those names change whenever `kitchen.yml` does.
+
+Because of that, the branch ruleset requires a check named
+**integration** that is not one of those instances. It is a gate job that
+waits for the whole matrix and fails unless every instance succeeded, so
+the four required checks, `lint`, `unit`, `version` and `integration`,
+stay correct no matter which platforms are being tested. GitHub has no
+pattern matching for required checks, and a required name that stops
+reporting blocks every pull request until someone edits the ruleset, so
+requiring the instances by name would turn a platform bump into a
+settings change.
+
+`release` and `publish` must stay out of the required list. They only
+run on pushes to `main`, so they would never report on a pull request.
 
 Pull requests
 -------------

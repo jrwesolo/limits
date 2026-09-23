@@ -18,6 +18,7 @@
 
 set -euo pipefail
 
+# shellcheck source=.github/scripts/lib.bash
 source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 
 : "${SUPERMARKET_USER:?must be set to the Supermarket account name}"
@@ -25,8 +26,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 
 site=${SUPERMARKET_SITE:-https://supermarket.chef.io}
 
-version="$(cookbook_version)"
-if [[ -z ${version} ]]; then
+# Tested in the condition, because cookbook_version returns non-zero when it
+# finds no declaration, and set -e would otherwise end the script on the
+# assignment itself, before the message below could be printed.
+if ! version="$(cookbook_version)" || [[ -z ${version} ]]; then
   echo "::error file=metadata.rb::Could not parse the version."
   exit 1
 fi
@@ -43,7 +46,12 @@ tag="v${version}"
 # The checkout is shallow and carries no tags, so fetch just this one. Doing it
 # before anything else means a publish without a release fails on the
 # fundamental problem rather than on a symptom of it.
-if ! git fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null &&
+#
+# gc.auto off for the same reason check-version turns it off, and it matters
+# more here: a fetch lost to that race falls through to the rev-parse below,
+# which cannot find the tag either on a shallow checkout, and the job reports
+# a release that never happened instead of a fetch that was interrupted.
+if ! git -c gc.auto=0 fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null &&
    ! git rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null; then
   echo "::error::${tag} is not tagged. Publish must run after a successful release."
   exit 1
@@ -54,16 +62,19 @@ fi
 # it is what names the tag, so it has to be read from the working tree first,
 # and is then checked against the tag rather than trusted.
 metadata="$(git show "refs/tags/${tag}:metadata.rb")"
-name="$(cookbook_name <(printf '%s\n' "${metadata}"))"
-tag_version="$(cookbook_version <(printf '%s\n' "${metadata}"))"
 
-if [[ -z ${name} ]]; then
+# Both reads are tested in the condition for the same reason as the version
+# above: a metadata file declaring neither would otherwise end the script on
+# the assignment, and a publish that stops without saying why is the least
+# useful failure this script has.
+if ! name="$(cookbook_name <(printf '%s\n' "${metadata}"))" || [[ -z ${name} ]]; then
   echo "::error::${tag} carries no parseable cookbook name in metadata.rb."
   exit 1
 fi
 
-if [[ ${tag_version} != "${version}" ]]; then
-  echo "::error::${tag} declares version ${tag_version}, not ${version}."
+if ! tag_version="$(cookbook_version <(printf '%s\n' "${metadata}"))" ||
+  [[ ${tag_version} != "${version}" ]]; then
+  echo "::error::${tag} declares version ${tag_version:-none}, not ${version}."
   exit 1
 fi
 
@@ -83,7 +94,7 @@ case ${status} in
   404)
     ;;
   *)
-    echo "::error::Unexpected HTTP ${status} asking ${site} about ${name} ${version}."
+    echo "::error::Unexpected HTTP ${status:-no answer} asking ${site} about ${name} ${version}."
     exit 1
     ;;
 esac

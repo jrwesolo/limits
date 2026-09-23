@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# Prints, as a workflow output, the platform that decides which Cinc
+# Workstation package gets downloaded.
+#
+# The installer builds its download URL from the platform it detects, so a
+# package for ubuntu 24.04 lives under ubuntu/24.04 and carries the same
+# filename as the build for every other release. Keying the cache on this
+# rather than on a label that tracks it means the key is the same fact the URL
+# is, and it keeps working on a runner that is not a GitHub image, where
+# ImageOS is not set at all.
+#
+# Expects GITHUB_OUTPUT in the environment, and takes OS_RELEASE to point the
+# lookup somewhere other than /etc/os-release. Run by the setup-cinc action.
+#
+# Demanded rather than tolerated, which is where this parts company with
+# set_output in the shared library. That helper lets a script be run by hand
+# outside Actions, because printing the answer is most of what those scripts
+# do. Here the output is the whole product: the cache key is built from it,
+# and a run that could not record it has produced nothing.
+
+set -euo pipefail
+
+: "${GITHUB_OUTPUT:?must be set by the workflow}"
+
+# The path is overridable so that the branch below can be exercised off a
+# Linux box, where /etc/os-release does not exist.
+os_release="${OS_RELEASE:-/etc/os-release}"
+
+if [[ -r ${os_release} ]]; then
+  # Data, not code to follow: the warning here is SC1090, a source whose path
+  # is not constant, rather than SC1091, a file shellcheck could not find.
+  # shellcheck source=/dev/null
+  . "${os_release}"
+  id="${ID:-unknown}-${VERSION_ID:-unknown}"
+else
+  id="${ImageOS:-unknown}"
+fi
+
+echo "Runner platform: ${id}"
+printf 'id=%s\n' "${id}" >> "${GITHUB_OUTPUT}"

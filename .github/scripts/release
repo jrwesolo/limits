@@ -13,13 +13,16 @@
 
 set -euo pipefail
 
+# shellcheck source=.github/scripts/lib.bash
 source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 
 : "${GITHUB_REPOSITORY:?must be set to owner/repo}"
 : "${GITHUB_SHA:?must be set to the commit to tag}"
 
-version="$(cookbook_version)"
-if [[ -z ${version} ]]; then
+# Tested in the condition, because cookbook_version returns non-zero when it
+# finds no declaration, and set -e would otherwise end the script on the
+# assignment itself, before the message below could be printed.
+if ! version="$(cookbook_version)" || [[ -z ${version} ]]; then
   echo "::error file=metadata.rb::Could not parse the version."
   exit 1
 fi

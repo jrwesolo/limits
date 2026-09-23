@@ -12,24 +12,99 @@
 
 set -euo pipefail
 
+# shellcheck source=.github/scripts/lib.bash
 source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 
 : "${BASE_REF:?must be set to the pull request base branch}"
 : "${GITHUB_REPOSITORY:?must be set to owner/repo}"
 
-version="$(cookbook_version)"
-if [[ -z ${version} ]]; then
+# Tested in the condition, because cookbook_version returns non-zero when it
+# finds no declaration and set -e would otherwise abort the script on the
+# assignment itself, before the message below could be printed. A bare red job
+# with no annotation is a worse answer than a wrong one.
+if ! version="$(cookbook_version)" || [[ -z ${version} ]]; then
   echo "::error file=metadata.rb::Could not parse the version."
   exit 1
 fi
 
-git fetch --quiet --depth=1 origin "${BASE_REF}"
-base_version="$(cookbook_version <(git show FETCH_HEAD:metadata.rb))"
+# gc.auto off for the fetch. git schedules a detached gc after a clone or a
+# fetch, the checkout step has already done one, and that gc rewrites
+# .git/shallow underneath a `--depth=1` fetch running at the same time. The
+# fetch then dies with "shallow file has changed since we read it", which is a
+# red job saying nothing about the cookbook. Measured locally at six failures
+# in six runs with it on, none with it off.
+#
+# Tested rather than left to set -e. A fetch that fails ends the script either
+# way, but without this the job goes red carrying git's message and no
+# annotation, which is the shape this file exists to stop. git's own wording
+# is the useful part, so it is carried into the annotation rather than thrown
+# away.
+if ! fetched="$(git -c gc.auto=0 fetch --quiet --depth=1 origin "${BASE_REF}" 2>&1)"; then
+  echo "::error::Could not fetch ${BASE_REF} to compare against: ${fetched}"
+  exit 1
+fi
+if ! base_version="$(cookbook_version <(git show FETCH_HEAD:metadata.rb))" ||
+  [[ -z ${base_version} ]]; then
+  echo "::error file=metadata.rb::Could not parse the version on ${BASE_REF}."
+  exit 1
+fi
 
 echo "metadata.rb: ${version} (${BASE_REF}: ${base_version})"
 
+# What this commit would publish, against what the base branch publishes.
+# Anything a user downloads that is not identical has to arrive under a
+# version of its own, or it lands on the base branch attributed to a version
+# that was released without it.
+# Keeps only what looks like a manifest entry: a sha, a tab, a path.
+# Anything else reaching stdout is noise from the toolchain rather than
+# part of the answer, and a stray blank line compared as a difference that
+# did not exist. Assigned before filtering so that a failure to build the
+# manifest still aborts under set -e.
+manifest() {
+  local raw line out=''
+
+  raw="$("$(dirname "${BASH_SOURCE[0]}")/list-payload" "$1")"
+
+  while IFS= read -r line; do
+    [[ ${line} == *$'\t'* ]] || continue
+    out+="${line}"$'\n'
+  done <<<"${raw}"
+
+  printf '%s' "${out}"
+}
+
 if [[ ${version} == "${base_version}" ]]; then
-  echo "Version unchanged, skipping release checks."
+  # Into variables rather than straight into diff, so that a manifest which
+  # fails to build aborts here. Compared as process substitutions, a broken
+  # list-payload yields two empty streams, diff calls them equal, and the
+  # check passes while guarding nothing.
+  base_published="$(manifest FETCH_HEAD)"
+  head_published="$(manifest HEAD)"
+
+  # Every cookbook publishes at least its metadata, so an empty manifest is a
+  # broken one rather than a cookbook with nothing in it.
+  if [[ -z ${base_published} || -z ${head_published} ]]; then
+    echo "::error file=chefignore::Could not determine what would be published."
+    exit 1
+  fi
+
+  published_diff="$(diff <(printf '%s\n' "${base_published}") \
+    <(printf '%s\n' "${head_published}") || true)"
+
+  if [[ -n ${published_diff} ]]; then
+    echo "::error file=metadata.rb::The published cookbook changes but the \
+version does not. Bump it, or keep the change out of the tarball."
+    # The diff itself, rather than paths picked out of it with a pattern.
+    # A pattern that fails to match prints nothing, which turns a failure
+    # into one with no explanation attached.
+    echo "What differs between what the base publishes and what this does:"
+    while IFS= read -r line; do
+      printf '  %s\n' "${line}"
+    done <<<"${published_diff}"
+    exit 1
+  fi
+
+  echo "Version unchanged, and nothing that would be published changed."
   exit 0
 fi
 

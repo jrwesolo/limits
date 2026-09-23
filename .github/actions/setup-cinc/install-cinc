@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# Installs a pinned Cinc Workstation, reusing a previously downloaded package
+# when one is present.
+#
+# The omnitruck installer keeps the package it fetches when it is given a
+# download directory with -d, and on a later run it finds the file there and
+# verifies its checksum rather than downloading again. That directory is what
+# the calling action caches, so a cache hit skips the download and leaves only
+# the dpkg install to do.
+#
+# Expects VERSION and CACHE_DIR in the environment.
+
+set -euo pipefail
+
+: "${VERSION:?must be set to the Cinc Workstation version to install}"
+: "${CACHE_DIR:?must be set to the directory the package is cached in}"
+
+# Created here rather than left to the installer, which makes it with umask
+# 077 as root. The runner user has to own it for the cache to be saved.
+mkdir -p "${CACHE_DIR}"
+
+# Fetched fresh on every run and executed as root, which is deliberate rather
+# than an oversight next to the SHA-pinned actions in these workflows. This is
+# the installation path Cinc documents and supports, it is the only one that
+# resolves a version to the right package for whatever the runner turns out to
+# be, and the package it downloads is checksum verified by the installer
+# against the omnitruck metadata. Pinning a copy of the script would leave a
+# vendored file to keep in step with an endpoint that can change under it,
+# which trades a small exposure for a maintenance burden and a staler one.
+curl -fsSL https://omnitruck.cinc.sh/install.sh |
+  sudo bash -s -- -P cinc-workstation -v "${VERSION}" -d "${CACHE_DIR}"
+
+# The package itself is still written as root, and actions/cache runs as the
+# runner user, so without this the save step cannot read what it is caching.
+sudo chown -R "$(id -u):$(id -g)" "${CACHE_DIR}"
+
+ls -lh "${CACHE_DIR}"
+
+# The first `cinc exec` in a home directory with no .cinc in it writes one, and
+# prints a bare newline to standard output while doing so. Every call after it
+# is clean. A runner installs Cinc fresh for each job, so that first call is
+# whichever script happens to run first, and its output arrives with a blank
+# line ahead of it. The newline comes from the wrapper before Ruby starts, so a
+# script cannot suppress it from the inside.
+#
+# Pay it here, where nothing is reading, rather than leaving every caller to
+# tolerate a line it did not print. It doubles as a check that what was just
+# installed actually runs.
+cinc exec ruby -e '' >/dev/null

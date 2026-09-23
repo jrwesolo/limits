@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# Fails unless every job in a workflow job's needs context succeeded.
+#
+# This exists so that a branch ruleset can require one status check with a
+# stable name instead of naming each instance of a matrix. The integration
+# matrix is generated from kitchen.yml at runtime, so its check names change
+# whenever a platform or a Cinc version is added or dropped, and GitHub has no
+# pattern matching for required checks: a required name that no longer reports
+# blocks every pull request until someone edits the ruleset.
+#
+# Anything other than success is a failure here, skipped included. A skipped
+# matrix means the job that discovers the instances did not produce any, which
+# must not read as everything having passed.
+#
+# Expects NEEDS to carry the toJSON of the needs context. The calling job has
+# to set `if: always()`, or it will be skipped along with whatever failed and
+# the required check will never report at all.
+
+set -euo pipefail
+
+: "${NEEDS:?must be set to the toJSON of a needs context}"
+
+failed=0
+
+# Into a variable rather than straight into the loop. Read from a process
+# substitution, a jq that cannot parse its input yields no lines at all, the
+# loop counts no failures, and the gate reports every job as having succeeded
+# on input it never read. Assigning it means set -e sees the failure.
+results="$(jq -r 'to_entries[] | "\(.key) \(.value.result)"' <<<"${NEEDS}")"
+
+# Fed by redirection rather than by a pipeline, which would run the loop in a
+# subshell and lose the count. A here string on an empty result yields one
+# empty line, which is a needs context with nothing in it rather than a job.
+while read -r job result; do
+  [[ -n ${job} ]] || continue
+  printf '%-24s %s\n' "${job}" "${result}"
+  [[ ${result} == success ]] || failed=1
+done <<<"${results}"
+
+if ((failed)); then
+  echo "::error::One or more required jobs did not succeed."
+  exit 1
+fi
+
+echo "All required jobs succeeded."

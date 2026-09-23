@@ -1,18 +1,11 @@
 Testing
 =======
 
-Testing was performed using [Cinc Workstation 26.2.4][1].
-
-```
-$ cinc --version
-Cinc Workstation version: 26.2.4
-Cinc Client version: 19.3.14
-Cinc Auditor version: 7.0.107
-Cinc CLI version: 6.1.39
-Biome version: unknown
-Test Kitchen version: 4.1.4
-Cookstyle version: 9.0.0
-```
+<!-- renovate: cinc-workstation -->
+Tested with [Cinc Workstation][1] 26.2.4, which is the version CI installs
+and the one Renovate keeps in step with `.github/actions/setup-cinc`. Run
+`cinc --version` to see the client, auditor, CLI, Test Kitchen and Cookstyle
+versions that ship inside it.
 
 Perform tests using the following commands:
 

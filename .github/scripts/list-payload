@@ -1,0 +1,68 @@
+#!/usr/bin/env -S cinc exec ruby
+#
+# Prints what a given commit would publish, one `sha<TAB>path` line per file,
+# sorted. The sha is git's own blob hash, so two listings compare equal only
+# when the published bytes are identical.
+#
+# What counts as published is decided by that commit's own chefignore, read
+# through the same class Chef uses when it builds the tarball. Nothing here
+# names a path or a directory: add a file to the cookbook, or a line to
+# chefignore, and this follows without an edit.
+#
+# Run through `cinc exec ruby` by the shebang, since Chef's chefignore is what
+# decides the answer and a reimplementation would be a second set of rules to
+# keep in step. Chef's whole rule is `File.fnmatch?(glob, path)` with no flags,
+# and matching that in a shell takes more than it looks like. Two cases, from
+# comparing a bash version against this one over the tree plus dotfiles,
+# backups and odd names: `.foo~` is published, because a wildcard in Ruby will
+# not match a leading dot, and only at position 0, so `dir/.foo~` is ignored;
+# and `file.swA` is published, because `[a-z]` there is a byte range while
+# bash reads it in collation order and matches the capital. A shell version
+# drops both from the payload and says nothing. `env -S` is what allows a
+# shebang to carry more than one argument.
+#
+# git is run through the array form of IO.popen rather than through backticks,
+# so no shell sees the argument. Interpolated into a command line, a ref
+# carrying a semicolon would run whatever followed it, and the obvious next
+# caller passes a branch name out of an event payload rather than a literal.
+#
+# Expects one argument, a commit-ish. Run it from the root of a checkout.
+
+require 'English'
+require 'pathname'
+require 'tmpdir'
+require 'chef/cookbook/chefignore'
+
+ref = ARGV[0].to_s
+abort 'must be given a commit to describe' if ref.empty?
+
+# Fail rather than guess. Without this commit's chefignore there is no answer
+# to give, and treating that as "nothing is ignored" would report the whole
+# tree as published and call every pull request a payload change.
+ignore = IO.popen(['git', 'show', "#{ref}:chefignore"], &:read)
+abort "cannot read chefignore at #{ref}" unless $CHILD_STATUS.success?
+
+# -z, so paths arrive exactly as git stores them. Without it git C-quotes any
+# path holding a space, a quote, or a non-ASCII byte, and the quoted spelling
+# would be compared against the unquoted one from the other side.
+records = IO.popen(['git', 'ls-tree', '-r', '-z', ref], &:read)
+abort "cannot list the tree at #{ref}" unless $CHILD_STATUS.success?
+
+entries = records.split("\0").reject(&:empty?).filter_map do |record|
+  meta, path = record.split("\t", 2)
+  _mode, type, sha = meta.to_s.split(' ')
+
+  # Only blobs are published. A submodule appears here as a commit entry and
+  # has no content of its own in this tree. Anything missing a part is not an
+  # entry at all, and used to become a blank line that read as a difference.
+  [path, sha] if type == 'blob' && !sha.nil? && !path.nil?
+end
+
+Dir.mktmpdir do |dir|
+  File.write(File.join(dir, 'chefignore'), ignore)
+  chefignore = Chef::Cookbook::Chefignore.new(dir)
+
+  entries.reject { |path, _| chefignore.ignored?(path) }
+         .sort
+         .each { |path, sha| puts "#{sha}\t#{path}" }
+end
