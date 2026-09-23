@@ -99,6 +99,13 @@ CONTRIBUTING*
 CHANGELOG*
 TESTING*
 
+# Agent guidance #
+##################
+AGENTS.md
+CLAUDE.md
+*/AGENTS.md
+*/CLAUDE.md
+
 # Vagrant #
 ###########
 .vagrant
