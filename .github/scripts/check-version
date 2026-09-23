@@ -57,8 +57,11 @@ if [[ ${version} == "${base_version}" ]]; then
   if [[ -n ${published_diff} ]]; then
     echo "::error file=metadata.rb::The published cookbook changes but the \
 version does not. Bump it, or keep the change out of the tarball."
-    echo "Files that differ in what would be published:"
-    printf '%s\n' "${published_diff}" | sed -n 's/^[<>] [0-9a-f]*\t/  /p' | sort -u
+    # The diff itself, rather than paths picked out of it with a pattern.
+    # A pattern that fails to match prints nothing, which turns a failure
+    # into one with no explanation attached.
+    echo "What differs between what the base publishes and what this does:"
+    printf '%s\n' "${published_diff}" | sed 's/^/  /'
     exit 1
   fi
 
