@@ -1,7 +1,7 @@
 Limits Cookbook
 ===============
 
-[![ci][1]][2]
+[![pipeline][1]][2]
 
 This cookbook is used to configure limits for the `pam_limits` module.
 By default, the configuration file is located at
@@ -164,8 +164,8 @@ limit 'delete example' do
 end
 ```
 
-[1]: https://github.com/jrwesolo/limits/actions/workflows/ci.yml/badge.svg?branch=main
-[2]: https://github.com/jrwesolo/limits/actions/workflows/ci.yml
+[1]: https://github.com/jrwesolo/limits/actions/workflows/pipeline.yml/badge.svg?branch=main
+[2]: https://github.com/jrwesolo/limits/actions/workflows/pipeline.yml
 [3]: https://supermarket.chef.io/cookbooks/limits
 [4]: https://github.com/jrwesolo/limits
 [5]: https://linux.die.net/man/5/limits.conf
