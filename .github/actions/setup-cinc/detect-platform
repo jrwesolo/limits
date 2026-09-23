@@ -9,6 +9,9 @@
 # rather than on a label that tracks it means the key is the same fact the URL
 # is, and it keeps working on a runner that is not a GitHub image, where
 # ImageOS is not set at all.
+#
+# Expects GITHUB_OUTPUT in the environment, and takes OS_RELEASE to point the
+# lookup somewhere other than /etc/os-release. Run by the setup-cinc action.
 
 set -euo pipefail
 
