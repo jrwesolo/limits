@@ -28,8 +28,26 @@ base_version="$(cookbook_version <(git show FETCH_HEAD:metadata.rb))"
 
 echo "metadata.rb: ${version} (${BASE_REF}: ${base_version})"
 
+# What this commit would publish, against what the base branch publishes.
+# Anything a user downloads that is not identical has to arrive under a
+# version of its own, or it lands on the base branch attributed to a version
+# that was released without it.
+manifest() {
+  "$(dirname "${BASH_SOURCE[0]}")/payload-manifest" "$1"
+}
+
 if [[ ${version} == "${base_version}" ]]; then
-  echo "Version unchanged, skipping release checks."
+  published_diff="$(diff <(manifest FETCH_HEAD) <(manifest HEAD) || true)"
+
+  if [[ -n ${published_diff} ]]; then
+    echo "::error file=metadata.rb::The published cookbook changes but the \
+version does not. Bump it, or keep the change out of the tarball."
+    echo "Files that differ in what would be published:"
+    printf '%s\n' "${published_diff}" | sed -n 's/^[<>] [0-9a-f]*\t/  /p' | sort -u
+    exit 1
+  fi
+
+  echo "Version unchanged, and nothing that would be published changed."
   exit 0
 fi
 

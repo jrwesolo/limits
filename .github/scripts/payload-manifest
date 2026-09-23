@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# Prints what a given commit would publish, one `sha<TAB>path` line per file,
+# sorted. The sha is git's own blob hash, so two manifests compare equal only
+# when the published bytes are identical.
+#
+# What counts as published is decided by that commit's own chefignore, read
+# through the same class Chef uses when it builds the tarball. Nothing here
+# names a path or a directory: add a file to the cookbook, or a line to
+# chefignore, and this follows without an edit.
+#
+# Expects one argument, a commit-ish. Run it from the root of a checkout.
+
+set -euo pipefail
+
+: "${1:?must be given a commit to describe}"
+
+exec cinc exec ruby - "$1" <<'RUBY'
+require 'pathname'
+require 'tmpdir'
+require 'chef/cookbook/chefignore'
+
+ref = ARGV[0]
+
+# The chefignore that belongs to this commit, not the one checked out. A
+# commit that changes chefignore changes what it publishes, and that has to
+# be visible here or the comparison misses it entirely.
+ignore = `git show #{ref}:chefignore 2>/dev/null`
+
+entries = `git ls-tree -r #{ref}`.lines.map do |line|
+  meta, path = line.chomp.split("\t", 2)
+  [path, meta.split[2]]
+end
+
+Dir.mktmpdir do |dir|
+  File.write(File.join(dir, 'chefignore'), ignore)
+  chefignore = Chef::Cookbook::Chefignore.new(dir)
+
+  entries.reject { |path, _| chefignore.ignored?(path) }
+         .sort
+         .each { |path, sha| puts "#{sha}\t#{path}" }
+end
+RUBY
