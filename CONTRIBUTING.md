@@ -18,8 +18,9 @@ curl -fsSL https://omnitruck.cinc.sh/install.sh | sudo bash -s -- \
 ```
 
 [TESTING.md][2] records the version this cookbook is tested against,
-what each integration fixture covers, how to run a single Test Kitchen
-instance, and what to do when a converge will not start. Integration tests run in containers through
+how each test layer is built, what each integration fixture covers, how
+to run a single Test Kitchen instance, and what to do when a converge
+will not start. Integration tests run in containers through
 kitchen-dokken, so Docker needs to be running for those.
 
 Running the tests
@@ -39,6 +40,7 @@ Where things live
 | `libraries/` | Plain Ruby classes that do the parsing and formatting |
 | `resources/` | The `limits_file` and `limit` custom resources |
 | `spec/libraries/` | RSpec tests for the library classes |
+| `spec/resources/` | ChefSpec tests for what only a converge decides |
 | `test/fixtures/cookbooks/limits_test/` | Wrapper cookbook the suites converge |
 | `test/integration/default/` | InSpec profile that asserts the result |
 | `.github/workflows/` | The pipeline: tests on every pull request, release and publish on merges to `main` |
@@ -55,16 +57,16 @@ class without naming another. If it can, it goes in the mirror file. If
 the failure only shows up when two classes meet, usually by writing a
 file and parsing it again, it goes in `writable_spec.rb`.
 
-There are no ChefSpec tests, deliberately, on cost rather than on
-safety. Stepping into a resource is opt-in, so a plain ChefSpec run
-would only assert that a resource was declared with certain properties,
-which for a cookbook that ships no recipes tests the fixture cookbook
-rather than this one. Stepping in would converge the resources for
-real, and they read and write whichever path they are handed, so every
-such spec would have to point at a tmpdir to stay away from the host's
-own `/etc/security/limits.conf`. Neither is worth the price while the
-logic lives in `libraries/` and these specs run in milliseconds.
-Resource behavior is covered by the integration suites instead.
+A test belongs in the cheapest of three layers that can catch the
+regression. `spec/libraries/` is plain Ruby with no Chef in it and runs
+in milliseconds; anything that is a fact about parsing, formatting or
+validation goes here, which is most of the cookbook. `spec/resources/`
+is ChefSpec, kept to what only a converge decides: what
+`converge_if_changed` reports as updated, property validation, which
+limits the purge action counts as declared, and that a limit writes
+through Chef's file resource. `test/integration/` is Test Kitchen and
+InSpec, for what is only true of a real filesystem: the bytes that land,
+ownership and mode, and idempotency across a second converge.
 
 Versioning
 ----------
