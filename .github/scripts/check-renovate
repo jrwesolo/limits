@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+#
+# Validates the Renovate configuration, and checks that every file claiming to
+# carry a dependency still yields one.
+#
+# The configuration's custom managers are regexes over other files, and a
+# regex that stops matching fails silently: Renovate proposes nothing, the
+# pinned versions quietly stop being maintained, and nothing anywhere turns
+# red. Extracting with Renovate itself and asserting that each marked file
+# still produces a dependency is what makes that a failure instead.
+#
+# Extraction only, so nothing is looked up over a network and the answer does
+# not depend on what a registry says today.
+#
+# Run it from the root of a checkout.
+
+set -euo pipefail
+
+# renovate: docker ghcr.io/renovatebot/renovate
+version=44.108.2
+digest=sha256:9a02c0e89a1337fed22b40b01a0c9b212e947eff37e8a1bd0d3696bfe5a0b344
+
+if ! command -v docker >/dev/null; then
+  echo "::error::docker is required to run the pinned Renovate."
+  exit 1
+fi
+
+image="ghcr.io/renovatebot/renovate:${version}@${digest}"
+
+out="$(mktemp -d)"
+trap 'rm -rf "${out}"' EXIT
+# The container runs as its own user, so the directory it writes the report
+# into has to be writable by somebody other than whoever created it.
+chmod 0777 "${out}"
+
+echo "Validating the configuration"
+docker run --rm --volume "${PWD}:/repo:ro" --workdir /repo \
+  --entrypoint renovate-config-validator "${image}"
+
+echo "Extracting dependencies"
+docker run --rm \
+  --volume "${PWD}:/repo:ro" \
+  --volume "${out}:/out" \
+  --workdir /repo \
+  --env RENOVATE_PLATFORM=local \
+  --env RENOVATE_DRY_RUN=extract \
+  --env RENOVATE_REPORT_TYPE=file \
+  --env RENOVATE_REPORT_PATH=/out/report.json \
+  "${image}" >/dev/null
+
+if [[ ! -s ${out}/report.json ]]; then
+  echo "::error::Renovate produced no report."
+  exit 1
+fi
+
+extracted="$(jq -r '.repositories[].packageFiles | to_entries[] | .value[].packageFile' \
+  "${out}/report.json" | sort -u)"
+
+if [[ -z ${extracted} ]]; then
+  echo "::error file=.github/renovate.jsonc::Renovate extracted no dependencies at all."
+  exit 1
+fi
+
+# Two rules, because each catches what the other cannot.
+#
+# The first is that every file carrying a marker must yield a dependency,
+# which catches a pattern in the configuration that has stopped matching what
+# it was written for.
+#
+# The second is that every file pinning something by digest must yield one
+# too, which catches the opposite mistake: a marker deleted or misspelled,
+# where searching for markers alone would stop looking at the file and report
+# success. The digest stays behind even when the marker does not.
+#
+# Both are discovered by looking rather than from a list here, so a new
+# dependency is covered without an edit. What neither covers is a marker
+# deleted from a dependency with no distinctive shape to search for, such as a
+# plain version string in documentation.
+missing=0
+while IFS= read -r file; do
+  if grep -qxF "${file}" <<<"${extracted}"; then
+    printf '  %-44s dependency found\n' "${file}"
+  else
+    printf '::error file=%s::Carries a Renovate marker but yields no dependency.\n' "${file}"
+    missing=1
+  fi
+done < <(git grep -lE '(#|<!--) renovate:' -- . | grep -v '^\.github/renovate\.' | sort -u)
+
+while IFS= read -r file; do
+  if grep -qxF "${file}" <<<"${extracted}"; then
+    printf '  %-44s digest pin tracked\n' "${file}"
+  else
+    printf '::error file=%s::Pins something by digest that Renovate does not track.\n' "${file}"
+    missing=1
+  fi
+done < <(git grep -lE 'sha256:[0-9a-f]{64}' -- . | grep -v '^\.github/renovate\.' | sort -u)
+
+if ((missing)); then
+  exit 1
+fi
+
+echo "Configuration is valid, and every marked file still yields a dependency."

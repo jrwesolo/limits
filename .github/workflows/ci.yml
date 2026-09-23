@@ -44,6 +44,8 @@ jobs:
         run: .github/scripts/check-shell
       - name: Actionlint
         run: .github/scripts/check-workflows
+      - name: Renovate config
+        run: .github/scripts/check-renovate
 
   unit:
     name: unit

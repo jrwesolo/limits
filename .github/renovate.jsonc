@@ -66,10 +66,11 @@
       // image, then the first version on the line below it.
       "customType": "regex",
       "managerFilePatterns": [
+        "/^\\.github/scripts/check-renovate$/",
         "/^\\.github/scripts/check-shell$/",
         "/^\\.github/scripts/check-workflows$/"
       ],
-      "matchStrings": ["renovate: docker (?<depName>\\S+)[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "matchStrings": ["renovate: docker (?<depName>\\S+)[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)[^\\n]*\\n[^\\n]*?(?<currentDigest>sha256:[0-9a-f]{64})"],
       "datasourceTemplate": "docker",
       "versioningTemplate": "semver"
     },
