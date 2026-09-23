@@ -17,14 +17,21 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 : "${BASE_REF:?must be set to the pull request base branch}"
 : "${GITHUB_REPOSITORY:?must be set to owner/repo}"
 
-version="$(cookbook_version)"
-if [[ -z ${version} ]]; then
+# Tested in the condition, because cookbook_version returns non-zero when it
+# finds no declaration and set -e would otherwise abort the script on the
+# assignment itself, before the message below could be printed. A bare red job
+# with no annotation is a worse answer than a wrong one.
+if ! version="$(cookbook_version)" || [[ -z ${version} ]]; then
   echo "::error file=metadata.rb::Could not parse the version."
   exit 1
 fi
 
 git fetch --quiet --depth=1 origin "${BASE_REF}"
-base_version="$(cookbook_version <(git show FETCH_HEAD:metadata.rb))"
+if ! base_version="$(cookbook_version <(git show FETCH_HEAD:metadata.rb))" ||
+  [[ -z ${base_version} ]]; then
+  echo "::error file=metadata.rb::Could not parse the version on ${BASE_REF}."
+  exit 1
+fi
 
 echo "metadata.rb: ${version} (${BASE_REF}: ${base_version})"
 
