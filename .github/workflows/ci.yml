@@ -36,10 +36,11 @@ jobs:
       - uses: ./.github/actions/setup-cinc
       - name: Cookstyle
         run: cinc exec cookstyle
-      # The shell scripts and the workflow are what decide whether a pull
-      # request can merge, so they are linted rather than only read. The runner
-      # images carry shellcheck; actionlint arrives in a pinned container,
-      # since they do not.
+      # The shell scripts, the workflow and the Renovate config are what
+      # decide whether a pull request can merge, so they are linted rather
+      # than only read. Each linter runs from a container pinned by tag and
+      # digest, so that a finding is the same one a contributor gets and not
+      # an artifact of whatever version a runner image happens to carry.
       - name: ShellCheck
         run: .github/scripts/check-shell
       - name: Actionlint

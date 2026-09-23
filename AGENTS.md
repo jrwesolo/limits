@@ -98,6 +98,17 @@ the case that must pass, and be able to switch between them on demand. If
 a case cannot be made to fail, either the check is not checking what it
 says or the test belongs somewhere else.
 
+Before trusting a green result, confirm the break was actually made. An
+edit that quietly changes nothing reads exactly like a check that passed,
+and the conclusion drawn from it is the opposite of the truth. Two shapes
+of this have cost time here. An in-place edit can no-op and still exit
+zero, because the tool is not the one the command was written for and the
+construct it was given means nothing to it. And a check that searches the
+repository will search its own source too, so a marker written in to be
+missing is found in the very file doing the looking. Assert the mutation
+is present, in the file and in the form intended, as a step of the test
+rather than as something done by eye.
+
 Adding to this guidance
 -----------------------
 

@@ -100,6 +100,17 @@ repushed and nothing in a diff would show it. Use the multi-platform index
 digest so it resolves on whatever architecture runs it, and mark it for
 Renovate so the two move together.
 
+A container reads the checkout over a bind mount, and on a workstation that
+mount can be a moment behind. Where the host shares a directory into a
+virtual machine, the file's length is cached separately from its contents,
+so a container started just after a file is written can read that file cut
+off at the length it used to have. A linter then reports a parse error at
+the cut, or, when the change was near the end of the file, reports nothing
+wrong at all, which is the half that matters: a local run can say a script
+is clean when it is not. If a local result disagrees with this pipeline,
+run it again before believing either. The runners do not share files this
+way, so nothing here is affected.
+
 Script or composite action
 --------------------------
 
