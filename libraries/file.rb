@@ -75,10 +75,16 @@ module Limits
         "#{@path}\n\nThis file is managed by Chef\nLocal changes may be lost!"
       )
 
+      # Once, rather than once per entry. columns walks every entry and
+      # transposes the result, and the entries do not change while the file
+      # is being rendered, so calling it inside the loop did that work n
+      # times over to arrive at the same widths.
+      widths = columns
+
       last_had_comment = true
       @entries.sort.each do |entry|
         str << "\n" if entry.comment || last_had_comment
-        str << entry.format(columns)
+        str << entry.format(widths)
         str << "\n"
         last_had_comment = !entry.comment.nil?
       end
