@@ -1,10 +1,11 @@
-CI script conventions
-=====================
+CI conventions
+==============
 
-These scripts decide whether a pull request may merge and what gets
-released, so they are held to a higher standard than a local helper. Each
-script's own header comment carries its detail; this file carries what
-they have in common.
+The workflow, the scripts its jobs run, and the composite action that
+installs the toolchain. Together they decide whether a pull request may
+merge and what gets released, so they are held to a higher standard than a
+local helper. Each script and each workflow job carries its own detail in
+a header comment; this file carries what they have in common.
 
 What is here
 ------------
@@ -76,6 +77,19 @@ cannot disagree about which cookbook and which version they are talking
 about. Parsed separately, a release could tag a version that was never
 validated, or publish an artifact describing different code than the tag.
 Add a helper there rather than a second parser in a script.
+
+The composite action
+--------------------
+
+A composite action's `run` steps execute in the caller's working directory
+rather than in the action's own, so a repository relative path to a script
+beside `action.yml` resolves only while the action happens to be checked
+out at the root of the repository using it. Address anything the action
+ships through `${{ github.action_path }}`.
+
+Its scripts follow everything above: `set -euo pipefail`, no extension,
+runnable by hand, and the environment they need declared in the step that
+calls them rather than assumed.
 
 Nothing under `.github/` is published, so changes here never need a new
 cookbook version.

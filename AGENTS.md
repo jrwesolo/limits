@@ -57,7 +57,7 @@ Where to look next
 
 | Before you | Read |
 | --- | --- |
-| edit anything under `.github/scripts/` | `.github/scripts/AGENTS.md` |
+| edit a workflow, a CI script or the setup action | `.github/AGENTS.md` |
 | add, move or remove a test | `TESTING.md` |
 | open a pull request or cut a release | `CONTRIBUTING.md` |
 | change what the resources accept | `README.md` |
