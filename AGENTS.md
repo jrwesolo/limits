@@ -16,10 +16,16 @@ Every tool runs inside Cinc Workstation, which ships its own Ruby:
 `cinc exec rspec`, `cinc exec cookstyle`, `cinc exec kitchen`. A bare
 `rspec` is a different toolchain and will not reproduce what CI does.
 
-Test Kitchen on macOS needs Docker addressed explicitly:
+Test Kitchen reaches Docker through the docker-api gem, which does not
+read Docker contexts: it connects to `unix:///var/run/docker.sock` unless
+`DOCKER_HOST` says otherwise. Docker Desktop on macOS creates that socket
+only when its default socket option is enabled, so `docker` on the command
+line can work while a converge fails with `No such file or directory -
+connect(2) for /var/run/docker.sock`. Point it at whatever the active
+context names:
 
 ```bash
-export DOCKER_HOST="unix://${HOME}/.docker/run/docker.sock"
+export DOCKER_HOST="$(docker context inspect --format '{{.Endpoints.docker.Host}}')"
 ```
 
 A workstation is not the CI runner
