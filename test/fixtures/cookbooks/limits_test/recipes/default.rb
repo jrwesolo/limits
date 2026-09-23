@@ -1,5 +1,42 @@
 include_recipe "#{cookbook_name}::setup"
 
+# limits_file has no converge_if_changed of its own, so the file resource
+# declared inside it is what marks it updated. That is why its write is
+# not silenced the way a limit's is, and these record the consequence of
+# that decision rather than trusting it. Each of its three actions is
+# covered, since each reaches the file resource differently, and a fourth
+# recorder covers the action that correctly does nothing.
+#
+# Nothing else in this suite would notice if that stopped being true. A
+# limits_file that quietly reported itself up to date would still write
+# the right file, every content assertion here would still pass, and every
+# notifies and subscribes a user had hung off one would silently stop
+# firing.
+#
+# The same question about the limit resource is settled in spec/resources
+# instead, where ChefSpec puts converge_if_changed to every case for the
+# price of a few milliseconds. ChefSpec cannot answer it for limits_file at
+# any price. It replaces Chef::Provider#compile_and_converge_action with a
+# bare instance_eval, so no child run context is built and the step that
+# marks a resource updated because a resource it declared was updated never
+# runs. A limits_file under ChefSpec always reports itself up to date.
+#
+# Declared with action :nothing and notified immediately, so they run only
+# when the resource they are attached to actually converged. Test Kitchen
+# converges twice and fails on a second converge that changes anything, so
+# a notification that fired unconditionally would fail the run.
+%w(
+  limits_file_create
+  limits_file_purge
+  limits_file_delete
+  limits_file_unchanged
+).each do |kind|
+  ruby_block "record the #{kind} notification" do
+    block { ::File.write("/tmp/notified_#{kind}", "#{kind}\n") }
+    action :nothing
+  end
+end
+
 # Manage an existing limits file and purge limits not maintained by Chef.
 limits_file '/etc/security/limits.conf' do
   action [:create, :purge]
@@ -40,6 +77,23 @@ end
 limits_file '/etc/security/limits.d/100_unpurged.conf' do
   mode '0640'
   action :create
+  notifies :run, 'ruby_block[record the limits_file_create notification]', :immediately
+end
+
+# A limit that is already what it should be. The seed puts 'kitchen soft
+# core 0' in this file and nothing changes it, so converge_if_changed has
+# every property to compare and finds none of them different.
+#
+# Whether it notifies is settled in spec/resources. What it is here for is
+# the second converge: a limit that converged when it had nothing to do
+# would rewrite this file every run, and Test Kitchen fails a run whose
+# second converge changes anything.
+limit 'limit that is already correct' do
+  path '/etc/security/limits.d/100_unpurged.conf'
+  domain 'kitchen'
+  type 'soft'
+  item 'core'
+  value 0
 end
 
 limit 'add limit to unpurged limits file' do
@@ -59,10 +113,21 @@ limit 'add limit to unmanaged and non-existent limits file' do
   value 65536
 end
 
+# Purge a file that does not exist. Nothing seeds it and no other resource
+# names it, so the action finds no file and returns before it reads or
+# declares anything. Two things worth asserting: it does not notify, and
+# it does not create the file it was pointed at, because purge is not
+# allowed to create anything.
+limits_file '/etc/security/limits.d/600_absent.conf' do
+  action :purge
+  notifies :run, 'ruby_block[record the limits_file_unchanged notification]', :immediately
+end
+
 # Delete a limits file the setup recipe seeded, so the delete action has
 # something to remove.
 limits_file '/etc/security/limits.d/300_deleted.conf' do
   action :delete
+  notifies :run, 'ruby_block[record the limits_file_delete notification]', :immediately
 end
 
 # Manage a file that does not exist yet. Everything above starts from a
@@ -102,4 +167,5 @@ end
 limits_file '/etc/security/limits.d/500_purged.conf' do
   mode '0640'
   action :purge
+  notifies :run, 'ruby_block[record the limits_file_purge notification]', :immediately
 end

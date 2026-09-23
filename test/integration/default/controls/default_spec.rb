@@ -294,3 +294,82 @@ control 'purged-only-file' do
     end
   end
 end
+
+control 'limits-file-notifications' do
+  impact 1.0
+  title 'limits_file notifies on each of its three actions'
+  desc <<~DESC
+    limits_file is the opposite of limit: it has no load_current_value and
+    no converge_if_changed, so the file resource declared inside it is the
+    only thing that knows whether anything changed, and therefore the only
+    thing that can mark the resource updated.
+
+    That is why its write is declared rather than run against a silent run
+    context the way a limit's is. Silencing it would leave limits_file
+    permanently reporting itself up to date, break every notifies hung off
+    it, and make Test Kitchen's idempotency check vacuous, since a resource
+    that never reports an update can never fail it.
+
+    This asserts that consequence rather than trusting it. Each action is
+    covered separately, because each reaches the file resource by a
+    different route: create renders and writes, purge writes only when it
+    has something to remove, and delete goes through the file resource's
+    own delete action. All three are attached to fixture files managed by a
+    single action, so a notification names one action unambiguously.
+  DESC
+
+  {
+    'limits_file_create' => '100_unpurged.conf, reformatted by the create action',
+    'limits_file_purge' => '500_purged.conf, which the purge action empties',
+    'limits_file_delete' => '300_deleted.conf, which the delete action removes',
+  }.each do |kind, what|
+    describe "the #{kind} notification, from #{what}" do
+      subject { file("/tmp/notified_#{kind}") }
+
+      it { should exist }
+
+      its('content') { should eq "#{kind}\n" }
+    end
+  end
+end
+
+control 'notifications-when-nothing-changes' do
+  impact 1.0
+  title 'limits_file does not notify when it correctly does nothing'
+  desc <<~DESC
+    The control above proves limits_file reports itself updated when it
+    changes something. This proves the other half, which is the half that
+    decides whether the first converge of a run is quiet: a resource that
+    converges and correctly does nothing must not report an update, and
+    must not fire a notification.
+
+    The second converge is already covered, but only by accident. Test
+    Kitchen converges twice and fails on a second converge that changes
+    anything, so a recorder that ran again would fail the run. Nothing
+    else covers the first converge, where a resource can legitimately have
+    nothing to do.
+
+    The case here is the early return in the purge action, and the
+    consequence that matters is asserted alongside the notification: purge
+    is not allowed to create the file it was pointed at.
+
+    The same question about the limit resource is settled in
+    spec/resources, where converge_if_changed can be put to every case
+    cheaply. It cannot be settled here for limits_file, which has no
+    converge_if_changed of its own: the file resource it declares is what
+    marks it updated, and ChefSpec never runs that resource.
+
+    This asserts the absence of a file, which would pass just as well if
+    the recorder could never write at all. What stops that being vacuous
+    is the control above, which asserts that recorders built the same way
+    do write when they should.
+  DESC
+
+  describe file('/tmp/notified_limits_file_unchanged') do
+    it { should_not exist }
+  end
+
+  describe file('/etc/security/limits.d/600_absent.conf') do
+    it { should_not exist }
+  end
+end

@@ -1,16 +1,11 @@
-# ChefSpec is deliberately not used here, on cost rather than on safety.
-# Stepping into a resource is opt-in, so a plain ChefSpec run never
-# converges these resources at all: it would assert that a resource was
-# declared with certain properties, which for a cookbook that ships no
-# recipes tests the fixture cookbook rather than this one. Stepping in
-# would converge them for real, and they read and write whichever path
-# they are handed, so each such spec would have to point at a tmpdir to
-# stay away from the host's own /etc/security/limits.conf.
-#
-# Neither is worth the price while the logic lives in libraries/ and
-# these specs run in milliseconds. Resource behavior is covered by the
-# Test Kitchen integration suites instead; these specs exercise the
-# library classes directly.
+# Required here rather than from the specs that use it, and this matters.
+# ChefSpec's RSpec integration is a config.include, and RSpec applies a
+# module added after a group already exists by injecting it into that
+# group. Its API defines a default `subject` of the Chef run, so requiring
+# ChefSpec from a spec file loaded after spec/libraries would override the
+# subject those groups had already declared, and `describe 'Limits::ITEMS'`
+# would go looking for a cookbook named Limits.
+require 'chefspec'
 
 # Anchored to this file rather than to the working directory, so the suite
 # runs from anywhere. Sorted because glob order is filesystem order, and a

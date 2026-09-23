@@ -15,6 +15,51 @@ cinc exec rspec        # spec tests
 cinc exec kitchen test # integration tests
 ```
 
+Spec tests
+----------
+
+`spec/libraries` exercises the library classes directly, which is where
+the parsing, formatting and validation live. Those specs construct a
+`Limits::File` and stub the two calls it makes to read its path, so they
+touch no disk and run in milliseconds.
+
+`spec/resources` covers what only a converge can decide, and ChefSpec
+provides the converge. `platform` compiles this cookbook's libraries and
+resources while skipping recipes, which is what makes a cookbook that
+ships no recipes testable at all, and `converge_block` runs recipe code
+written inline in the example. The specs `step_into` the resource under
+test and stub `::File` for the managed path, so the host's own
+`/etc/security/limits.conf` is never read. Nothing is written either,
+because ChefSpec skips every resource it has not been told to step into,
+including the file resource each custom resource writes through.
+
+The `limits_file` specs cover the purge action's rule. It decides what
+to remove by asking the resource collection which limits Chef declares,
+rather than by reading them out of the file, so there is nothing to test
+without a converge. `limits_file` declares its file resource, so ChefSpec
+sees it, and the assertions are made against the content and permissions
+that resource was handed. That covers the rules the README states and
+the integration suites cannot reach cheaply: a limit protects its entry
+from being purged even when it carries `action :nothing` and never
+converges, and only for the path it names.
+
+The `limit` specs assert something different, because `limit` runs its
+file resource rather than declaring it. That resource never enters the
+resource collection, so no matcher can see it and these specs say
+little about the bytes written; the content is `Limits::File#to_s`,
+which `spec/libraries` covers directly. What they cover is what
+`converge_if_changed` decides, which is the only thing that can mark the
+resource updated now that its write reports nothing, and property
+validation, which the integration suites cannot test at all: a limit
+that fails validation fails the converge, and a converge that fails is a
+Test Kitchen run that fails.
+
+One `limit` spec catches the file resource on its way through instead,
+by wrapping `Chef::Resource::File.new`, and asserts that the content is
+handed to it and run rather than written with `::File.write`. That is
+what makes the write replace the file in one step, and a direct write
+lands the same bytes, so nothing else would notice it going.
+
 Integration fixtures
 --------------------
 
@@ -31,6 +76,7 @@ touches covers one behavior, and the numeric prefix names it:
 | `limits.d/300_deleted.conf` | yes | `limits_file :delete` | the delete action |
 | `limits.d/400_created.conf` | no | `limits_file :create` | building a file from nothing, a word value, and a boolean item |
 | `limits.d/500_purged.conf` | yes | `limits_file :purge` | purging a file with no create action beside it |
+| `limits.d/600_absent.conf` | no | `limits_file :purge` | purging a path with no file on it |
 
 `limits.conf` is seeded with limits no resource declares, an unparseable
 line and a comment attached to nothing, so the purge, the rewrite and the
@@ -47,7 +93,38 @@ a flag rather than a size and that an older `pam_limits` does not know.
 `500_purged.conf` is the only file managed by `:purge` on its own, which
 is what proves the purge action maintains ownership and mode rather than
 leaving whatever the file already had; like the other seeds it is laid
-down with the wrong owner and mode on purpose.
+down with the wrong owner and mode on purpose. `600_absent.conf` is never
+created by anything, so the purge pointed at it proves the action neither
+creates a file nor notifies.
+
+Four `ruby_block` resources record that a `limits_file` notified them,
+one per action plus one for the action that correctly does nothing. They
+exist because `limits_file` has no `converge_if_changed` of its own: the
+`file` resource declared inside it is the only thing that knows whether
+anything changed, and therefore the only thing that can mark the
+resource updated. A `limits_file` that quietly reported itself up to
+date would still write the right file, so every content assertion in the
+profile would still pass while every `notifies` a user had hung off one
+silently stopped firing.
+
+The same question about `limit` is settled in `spec/resources` rather
+than here, where ChefSpec can put `converge_if_changed` to every case for
+the price of a few milliseconds. A `limit` marks itself updated through
+`converge_by`, which ChefSpec leaves alone.
+
+There is no equivalent for `limits_file` at any price. ChefSpec replaces
+`Chef::Provider#compile_and_converge_action` with a bare `instance_eval`,
+so no child run context is built and the step that marks a resource
+updated because a resource it declared was updated never runs. Its own
+source calls this out as a known limitation. A `limits_file` under
+ChefSpec always reports itself up to date, whatever it did, which is why
+these recorders stay here.
+
+The negative case matters as much as the positive one, because it is
+what decides whether a first converge is quiet. A second converge is
+already covered, though only by accident: Test Kitchen converges twice
+and fails a run whose second converge changes anything, so a recorder
+that fired every time would fail the run.
 
 Seeding happens once per container, not once per converge. The seeds
 declare `action :nothing` and are notified by a marker file at
