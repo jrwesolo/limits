@@ -80,6 +80,26 @@ about. Parsed separately, a release could tag a version that was never
 validated, or publish an artifact describing different code than the tag.
 Add a helper there rather than a second parser in a script.
 
+Script or composite action
+--------------------------
+
+Both keep logic out of the YAML, and the script is the default. An action
+earns its place only when one of these is true:
+
+* It bundles several steps. Installing the toolchain is three: detect the
+  platform, restore the cache, install.
+* It has to call another action. `actions/cache` is reachable only from a
+  step, so anything that caches has to live in an action.
+* More than one job uses it.
+* Another repository has to be able to use it. Actions are addressable
+  from elsewhere; scripts are not.
+
+Otherwise the action buys an `action.yml`, an inputs and outputs mapping,
+and a layer of indirection for nothing, and it costs the property that
+makes these scripts debuggable: a script runs by hand from a checkout, so
+a failure can be reproduced without pushing a commit and waiting for a
+runner. An action cannot, without a harness to feed it.
+
 The composite action
 --------------------
 
