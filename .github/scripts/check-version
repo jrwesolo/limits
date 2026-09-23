@@ -27,7 +27,13 @@ if ! version="$(cookbook_version)" || [[ -z ${version} ]]; then
   exit 1
 fi
 
-git fetch --quiet --depth=1 origin "${BASE_REF}"
+# gc.auto off for the fetch. git schedules a detached gc after a clone or a
+# fetch, the checkout step has already done one, and that gc rewrites
+# .git/shallow underneath a `--depth=1` fetch running at the same time. The
+# fetch then dies with "shallow file has changed since we read it", which is a
+# red job saying nothing about the cookbook. Measured locally at six failures
+# in six runs with it on, none with it off.
+git -c gc.auto=0 fetch --quiet --depth=1 origin "${BASE_REF}"
 if ! base_version="$(cookbook_version <(git show FETCH_HEAD:metadata.rb))" ||
   [[ -z ${base_version} ]]; then
   echo "::error file=metadata.rb::Could not parse the version on ${BASE_REF}."

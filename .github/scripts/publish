@@ -46,7 +46,12 @@ tag="v${version}"
 # The checkout is shallow and carries no tags, so fetch just this one. Doing it
 # before anything else means a publish without a release fails on the
 # fundamental problem rather than on a symptom of it.
-if ! git fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null &&
+#
+# gc.auto off for the same reason check-version turns it off, and it matters
+# more here: a fetch lost to that race falls through to the rev-parse below,
+# which cannot find the tag either on a shallow checkout, and the job reports
+# a release that never happened instead of a fetch that was interrupted.
+if ! git -c gc.auto=0 fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null &&
    ! git rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null; then
   echo "::error::${tag} is not tagged. Publish must run after a successful release."
   exit 1
