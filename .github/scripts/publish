@@ -25,8 +25,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 
 site=${SUPERMARKET_SITE:-https://supermarket.chef.io}
 
-version="$(cookbook_version)"
-if [[ -z ${version} ]]; then
+# Tested in the condition, because cookbook_version returns non-zero when it
+# finds no declaration, and set -e would otherwise end the script on the
+# assignment itself, before the message below could be printed.
+if ! version="$(cookbook_version)" || [[ -z ${version} ]]; then
   echo "::error file=metadata.rb::Could not parse the version."
   exit 1
 fi
@@ -54,16 +56,19 @@ fi
 # it is what names the tag, so it has to be read from the working tree first,
 # and is then checked against the tag rather than trusted.
 metadata="$(git show "refs/tags/${tag}:metadata.rb")"
-name="$(cookbook_name <(printf '%s\n' "${metadata}"))"
-tag_version="$(cookbook_version <(printf '%s\n' "${metadata}"))"
 
-if [[ -z ${name} ]]; then
+# Both reads are tested in the condition for the same reason as the version
+# above: a metadata file declaring neither would otherwise end the script on
+# the assignment, and a publish that stops without saying why is the least
+# useful failure this script has.
+if ! name="$(cookbook_name <(printf '%s\n' "${metadata}"))" || [[ -z ${name} ]]; then
   echo "::error::${tag} carries no parseable cookbook name in metadata.rb."
   exit 1
 fi
 
-if [[ ${tag_version} != "${version}" ]]; then
-  echo "::error::${tag} declares version ${tag_version}, not ${version}."
+if ! tag_version="$(cookbook_version <(printf '%s\n' "${metadata}"))" ||
+  [[ ${tag_version} != "${version}" ]]; then
+  echo "::error::${tag} declares version ${tag_version:-none}, not ${version}."
   exit 1
 fi
 

@@ -1,1 +1,1 @@
-This repository's guidance for agents lives in @AGENTS.md.
+Guidance for the pipeline in this directory lives in @AGENTS.md.
