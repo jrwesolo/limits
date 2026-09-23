@@ -312,9 +312,10 @@ control 'limits-file-notifications' do
 
     This asserts that consequence rather than trusting it. Each action is
     covered separately, because each reaches the file resource by a
-    different route: create renders and writes, purge writes only when it
-    has something to remove, and delete goes through the file resource's
-    own delete action. All three are attached to fixture files managed by a
+    different route: create renders and writes, purge declares the file
+    resource on every run but hands it content only when it has something
+    to remove, and delete goes through the file resource's own delete
+    action. All three are attached to fixture files managed by a
     single action, so a notification names one action unambiguously.
   DESC
 

@@ -93,9 +93,31 @@ describe 'limits_file' do
     context 'with every limit in the file declared by a resource' do
       let(:seed) { "kitchen soft nofile 1024\n" }
 
-      # Not merely unchanged. The action was not asked to create anything,
-      # so with nothing to remove it declares no resource at all and the
-      # file is left in whatever format it was already in.
+      # The action was not asked to create anything, so with nothing to
+      # remove it hands the file resource no content and the file keeps
+      # whatever format it was already in.
+      it 'leaves the content alone' do
+        expect(chef_run.file(path).content).to be_nil
+      end
+
+      # Ownership and mode are not conditional on a run finding something
+      # to purge. A file corrected on the run that purged it and then
+      # chmodded by hand would never be corrected again, because every run
+      # after the first has nothing left to remove.
+      it 'still carries owner, group and mode' do
+        expect(chef_run).to create_file(path)
+          .with(owner: 'root', group: 'root', mode: '0644')
+      end
+    end
+
+    context 'with no file on the path at all' do
+      before do
+        allow(::File).to receive(:exist?).with(path).and_return(false)
+      end
+
+      # Purge manages a file somebody else wrote. It is not a way to ask
+      # for one, so it declares nothing rather than laying down an empty
+      # file with the resource's ownership on it.
       it 'declares no file resource' do
         expect(chef_run).to_not create_file(path)
       end

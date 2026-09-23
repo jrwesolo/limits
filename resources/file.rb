@@ -25,6 +25,10 @@ action :create do
 end
 
 action :purge do
+  # Purge is not allowed to create anything, so a path with nothing on it
+  # is left alone rather than given an empty file.
+  return unless ::File.exist?(new_resource.path)
+
   managed = Limits::Helpers.find_in_run_context(
     run_context.root_run_context,
     new_resource.path
@@ -34,12 +38,6 @@ action :purge do
   # shadow the file resource declared below.
   limits = Limits::File.new(new_resource.path)
   unmanaged = limits.reject { |entry| managed.include?(entry.id) }
-
-  # Purge acts only when there is something to purge, so a file whose
-  # limits are all declared is left alone rather than reformatted by an
-  # action that was not asked to create anything.
-  return if unmanaged.empty?
-
   unmanaged.each { |entry| limits.delete(entry) }
 
   # Through Chef's file resource for the same reasons the create action
@@ -48,8 +46,16 @@ action :purge do
   # group or mode on a file managed by this action alone, and no content
   # diff in the run output for the one action whose whole job is deleting
   # configuration somebody else wrote.
+  #
+  # Content only when there is something to remove, since reformatting a
+  # file whose limits are all declared is not what this action was asked
+  # for. Owner, group and mode are set either way: they are properties of
+  # this resource rather than of a particular run's findings, and a file
+  # whose permissions were corrected once and then drifted would otherwise
+  # stay drifted, because the run that corrected them is the same run that
+  # left nothing to purge.
   file new_resource.path do
-    content limits.to_s
+    content limits.to_s unless unmanaged.empty?
     owner new_resource.owner
     group new_resource.group
     mode new_resource.mode

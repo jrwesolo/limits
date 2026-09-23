@@ -130,10 +130,16 @@ on the runs where nothing notifies it, rather than being removed and
 written back the next time it fires.
 
 When it removes something it rewrites the file through Chef, so `backup`
-is honored and owner, group, and mode are maintained the same way the
-`create` action maintains them. A file with nothing to purge is left
-alone rather than reformatted, since this action was not asked to create
-anything.
+is honored. Owner, group, and mode are maintained the same way the
+`create` action maintains them, on every run rather than only on one that
+finds something to remove: otherwise the run that corrected a file's
+permissions would be the same run that left nothing to purge, and a file
+changed by hand afterwards would stay changed.
+
+The content of a file with nothing to purge is left alone rather than
+reformatted, since this action was not asked to create anything, and a
+path with no file on it is left alone entirely rather than given an empty
+one.
 
 ### Action: `delete`
 
