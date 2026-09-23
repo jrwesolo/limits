@@ -77,5 +77,31 @@ home directory, which is both private and correct on more machines. A
 relative path, an environment variable, or an obvious placeholder such as
 `/path/to/checkout` serves everywhere else.
 
-Keep this file short. Guidance that belongs to one directory belongs in
-that directory, beside the code it describes.
+Adding to this guidance
+-----------------------
+
+Keep this documentation current. When something in this repository costs
+more to learn than it should have, write it down here, so the next person
+is not charged for it twice. The bar is a lesson that is not obvious from
+the code and was expensive to discover: a failure the tooling reports
+without explaining, a constraint a framework imposes on how the code has
+to be shaped, a trap that has cost a build or an afternoon. What the
+linter enforces, what a script's own header comment explains at the moment
+it applies, and anything a reader can see by looking do not belong here.
+
+Write it the way the rest of this file is written:
+
+* **Generic.** State the rule and the failure it prevents, not the
+  incident that produced it. No pull request numbers, no unreleased
+  version numbers, no names, no dates, nothing local to one machine.
+* **At the narrowest scope that covers it.** Guidance belonging to one
+  directory goes in an `AGENTS.md` there, which is read when that
+  directory is worked on and costs nothing otherwise. This file is for
+  what spans the repository, and it should stay short enough to be worth
+  reading every time.
+* **With its reason attached.** A rule with no failure behind it reads as
+  arbitrary, and the next person to find it inconvenient will remove it.
+
+A new guidance file at the root, or under a new directory, is published to
+Supermarket unless `chefignore` excludes it. Add the pattern in the same
+change, and confirm it with `.github/scripts/list-payload HEAD`.
