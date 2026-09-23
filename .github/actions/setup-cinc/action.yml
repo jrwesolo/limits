@@ -40,9 +40,13 @@ runs:
         path: ${{ runner.temp }}/cinc-workstation
         key: cinc-workstation-${{ steps.platform.outputs.id }}-${{ runner.arch }}-${{ inputs.version }}
 
+    # Addressed through action_path, as the step above is. A composite
+    # action's run steps execute in the caller's working directory rather
+    # than in its own, so a repo relative path here would depend on this
+    # action being checked out at the root of the repository running it.
     - name: Install Cinc Workstation ${{ inputs.version }}
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
         CACHE_DIR: ${{ runner.temp }}/cinc-workstation
-      run: .github/scripts/install-cinc
+      run: ${{ github.action_path }}/install-cinc
