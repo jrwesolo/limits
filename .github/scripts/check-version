@@ -75,7 +75,9 @@ version does not. Bump it, or keep the change out of the tarball."
     # A pattern that fails to match prints nothing, which turns a failure
     # into one with no explanation attached.
     echo "What differs between what the base publishes and what this does:"
-    printf '%s\n' "${published_diff}" | sed 's/^/  /'
+    while IFS= read -r line; do
+      printf '  %s\n' "${line}"
+    done <<<"${published_diff}"
     exit 1
   fi
 

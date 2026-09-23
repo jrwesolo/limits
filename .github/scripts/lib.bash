@@ -13,15 +13,35 @@
 # Prints the name declared in a cookbook metadata file, defaulting to the
 # metadata.rb in the current directory.
 cookbook_name() {
-  local file=${1:-metadata.rb}
-  sed -n "s/^name[[:space:]]*'\([^']*\)'.*/\1/p" "${file}"
+  cookbook_field name "${1:-metadata.rb}"
 }
 
 # Prints the version declared in a cookbook metadata file, defaulting to the
 # metadata.rb in the current directory.
 cookbook_version() {
-  local file=${1:-metadata.rb}
-  sed -n "s/^version[[:space:]]*'\([^']*\)'.*/\1/p" "${file}"
+  cookbook_field version "${1:-metadata.rb}"
+}
+
+# Prints the first single-quoted value declared for the given field in a
+# cookbook metadata file.
+#
+# The first, and not every match. A substitution prints one line per match,
+# so a metadata file naming a field twice would hand the caller two values
+# where it reads one, and every caller here treats the result as a single
+# string. Reading it in the shell also matches how check-version finds the
+# newest changelog heading, rather than two ways of doing one thing.
+cookbook_field() {
+  local field=$1 file=$2 line
+  local pattern="^${field}[[:space:]]+'([^']*)'"
+
+  while IFS= read -r line; do
+    if [[ ${line} =~ ${pattern} ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+      return 0
+    fi
+  done < "${file}"
+
+  return 1
 }
 
 # Succeeds when the given tag (including its leading v) already exists on the
