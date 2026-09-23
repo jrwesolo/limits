@@ -31,21 +31,26 @@ export DOCKER_HOST="$(docker context inspect --format '{{.Endpoints.docker.Host}
 A workstation is not the CI runner
 ----------------------------------
 
-CI runs on Linux. Three differences have each turned a local pass into a
-red build:
+CI runs on Ubuntu, with GNU command line tools, bash 5 and a case
+sensitive filesystem. Where a workstation differs, a local pass proves
+less than it appears to:
 
-* **The macOS filesystem is case insensitive.** A `require` or a path
-  whose case is wrong resolves here and fails there. Ruby's `English`
-  library is the example: the file is `English.rb`, so `require 'english'`
-  works only on a case-insensitive filesystem.
-* **The command line tools are BSD, not GNU.** `sed -i` takes an argument
-  here and not there, and `env` and `date` differ too. Anything a workflow
-  will run has to be exercised against GNU tools.
-* **`/bin/bash` here is 3.2.** The runners have bash 5, so a script may use
-  modern syntax, but a local run does not prove it works, and a local run
-  can pass on a construct the runner reads differently.
+* **Filesystem case sensitivity.** macOS and Windows default to
+  insensitive, so a `require` or a path whose case is wrong resolves there
+  and fails on the runner. Ruby's `English` library is the example: the
+  file is `English.rb`, so `require 'english'` works only where case does
+  not matter.
+* **GNU against BSD command line tools.** macOS and the BSDs ship their
+  own versions, and the flags differ. `sed -i` takes a backup suffix
+  argument on BSD, commonly written `-i ''`, while GNU `sed -i` takes none
+  and reads that empty string as the script instead. `date`, `readlink`
+  and `env` differ too.
+* **Bash version.** macOS ships bash 3.2 as `/bin/bash`, so modern syntax
+  cannot be exercised there, and a script that passes under 3.2 can behave
+  differently under 5.
 
-Running the thing in a Linux container answers all three cheaply.
+Running the thing in a container matching the runner settles all three,
+whatever the workstation is.
 
 Where to look next
 ------------------
@@ -56,6 +61,21 @@ Where to look next
 | add, move or remove a test | `TESTING.md` |
 | open a pull request or cut a release | `CONTRIBUTING.md` |
 | change what the resources accept | `README.md` |
+
+Keep nothing local in the repository
+------------------------------------
+
+No detail belonging to one machine or one person may reach a committed
+file, a commit message or a pull request: a home directory, a username, a
+hostname, an absolute path outside the checkout, a personal email address
+or a token. Documentation, comments, fixtures and test data all count, and
+a path copied out of a terminal is the usual way one arrives.
+
+Write the derivation rather than the value. The Docker line above asks the
+active context for the socket instead of naming a path under somebody's
+home directory, which is both private and correct on more machines. A
+relative path, an environment variable, or an obvious placeholder such as
+`/path/to/checkout` serves everywhere else.
 
 Keep this file short. Guidance that belongs to one directory belongs in
 that directory, beside the code it describes.
