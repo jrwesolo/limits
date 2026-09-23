@@ -100,23 +100,28 @@ if ! pinned="$(git grep -lE '(@|digest=)sha256:[0-9a-f]{64}' -- . | grep -vE "${
 fi
 
 missing=0
-while IFS= read -r file; do
-  if grep -qxF "${file}" <<<"${extracted}"; then
-    printf '  %-44s dependency found\n' "${file}"
-  else
-    printf '::error file=%s::Carries a Renovate marker but yields no dependency.\n' "${file}"
-    missing=1
-  fi
-done <<<"${marked}"
 
-while IFS= read -r file; do
-  if grep -qxF "${file}" <<<"${extracted}"; then
-    printf '  %-44s digest pin tracked\n' "${file}"
-  else
-    printf '::error file=%s::Pins something by digest that Renovate does not track.\n' "${file}"
-    missing=1
-  fi
-done <<<"${pinned}"
+# Both rules ask the same question of a different list, so it is asked in one
+# place. Fed by redirection rather than by a pipeline, which would run the loop
+# in a subshell and lose the count.
+each_must_be_extracted() {
+  local found=$1 complaint=$2 list=$3 file
+
+  while IFS= read -r file; do
+    if grep -qxF "${file}" <<<"${extracted}"; then
+      printf '  %-44s %s\n' "${file}" "${found}"
+    else
+      printf '::error file=%s::%s\n' "${file}" "${complaint}"
+      missing=1
+    fi
+  done <<<"${list}"
+}
+
+each_must_be_extracted 'dependency found' \
+  'Carries a Renovate marker but yields no dependency.' "${marked}"
+
+each_must_be_extracted 'digest pin tracked' \
+  'Pins something by digest that Renovate does not track.' "${pinned}"
 
 if ((missing)); then
   exit 1

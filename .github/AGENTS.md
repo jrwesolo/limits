@@ -59,7 +59,13 @@ Style
 -----
 
 * Bash with `set -euo pipefail`, written with modern bash idioms rather
-  than POSIX portability.
+  than POSIX portability. Bash 3.2 all the same, which is what a macOS
+  contributor has unless they installed another one: the runners have
+  bash 5, so nothing here would catch a 4-or-later construct before it
+  reached somebody's workstation, and shellcheck has no option to target
+  a version. In practice that costs nothing, because the things bash 4
+  adds buy little here: an associative array in place of a membership
+  test means keeping a list and a set of it in step, for one expression.
 * Prefer bash's own facilities to a subprocess where they read as clearly.
   A `[[ ... =~ ... ]]` with `BASH_REMATCH` says what a one-capture `sed`
   substitution says, and returns one value rather than one line per match.
