@@ -37,7 +37,22 @@ manifest() {
 }
 
 if [[ ${version} == "${base_version}" ]]; then
-  published_diff="$(diff <(manifest FETCH_HEAD) <(manifest HEAD) || true)"
+  # Into variables rather than straight into diff, so that a manifest which
+  # fails to build aborts here. Compared as process substitutions, a broken
+  # payload-manifest yields two empty streams, diff calls them equal, and the
+  # check passes while guarding nothing.
+  base_published="$(manifest FETCH_HEAD)"
+  head_published="$(manifest HEAD)"
+
+  # Every cookbook publishes at least its metadata, so an empty manifest is a
+  # broken one rather than a cookbook with nothing in it.
+  if [[ -z ${base_published} || -z ${head_published} ]]; then
+    echo "::error file=chefignore::Could not determine what would be published."
+    exit 1
+  fi
+
+  published_diff="$(diff <(printf '%s\n' "${base_published}") \
+    <(printf '%s\n' "${head_published}") || true)"
 
   if [[ -n ${published_diff} ]]; then
     echo "::error file=metadata.rb::The published cookbook changes but the \
