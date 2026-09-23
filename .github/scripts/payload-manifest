@@ -16,6 +16,7 @@ set -euo pipefail
 : "${1:?must be given a commit to describe}"
 
 exec cinc exec ruby - "$1" <<'RUBY'
+require 'english'
 require 'pathname'
 require 'tmpdir'
 require 'chef/cookbook/chefignore'
@@ -25,11 +26,27 @@ ref = ARGV[0]
 # The chefignore that belongs to this commit, not the one checked out. A
 # commit that changes chefignore changes what it publishes, and that has to
 # be visible here or the comparison misses it entirely.
-ignore = `git show #{ref}:chefignore 2>/dev/null`
+# Fail rather than guess. Without this commit's chefignore there is no
+# answer to give, and returning "nothing is ignored" would report the whole
+# tree as published and call every pull request a payload change.
+ignore = `git show #{ref}:chefignore`
+abort "cannot read chefignore at #{ref}" unless $CHILD_STATUS.success?
 
-entries = `git ls-tree -r #{ref}`.lines.map do |line|
-  meta, path = line.chomp.split("\t", 2)
-  [path, meta.split[2]]
+# -z, so paths arrive exactly as git stores them. Without it git C-quotes
+# any path holding a space, a quote, or a non-ASCII byte, and the quoted
+# spelling would be compared against the unquoted one from the other side.
+records = `git ls-tree -r -z #{ref}`
+abort "cannot list the tree at #{ref}" unless $CHILD_STATUS.success?
+
+entries = records.split("\0").reject(&:empty?).filter_map do |record|
+  meta, path = record.split("\t", 2)
+  _mode, type, sha = meta.to_s.split(' ')
+
+  # Only blobs are published. A submodule appears here as a commit entry
+  # and has no content of its own in this tree. Anything without all three
+  # parts is not an entry at all, and silently became a blank line in the
+  # manifest before, which read as a difference that did not exist.
+  [path, sha] if type == 'blob' && !sha.nil? && !path.nil?
 end
 
 Dir.mktmpdir do |dir|
