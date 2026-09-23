@@ -40,7 +40,7 @@ echo "metadata.rb: ${version} (${BASE_REF}: ${base_version})"
 manifest() {
   local raw line out=''
 
-  raw="$("$(dirname "${BASH_SOURCE[0]}")/payload-manifest" "$1")"
+  raw="$("$(dirname "${BASH_SOURCE[0]}")/list-payload" "$1")"
 
   while IFS= read -r line; do
     [[ ${line} == *$'\t'* ]] || continue
@@ -53,7 +53,7 @@ manifest() {
 if [[ ${version} == "${base_version}" ]]; then
   # Into variables rather than straight into diff, so that a manifest which
   # fails to build aborts here. Compared as process substitutions, a broken
-  # payload-manifest yields two empty streams, diff calls them equal, and the
+  # list-payload yields two empty streams, diff calls them equal, and the
   # check passes while guarding nothing.
   base_published="$(manifest FETCH_HEAD)"
   head_published="$(manifest HEAD)"
