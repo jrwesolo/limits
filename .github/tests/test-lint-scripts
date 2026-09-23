@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# The two lint runners, with shellcheck and docker stubbed.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+scripts="$(repo_root)/.github/scripts"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+mkdir -p "${tmp}/bin"
+
+cat > "${tmp}/bin/docker" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${STUB_DIR}/docker-args"
+[[ ${STUB_DOCKER:-ok} == ok ]] || { echo 'stub: the linter found a problem' >&2; exit 1; }
+STUB
+chmod +x "${tmp}/bin/docker"
+
+work="${tmp}/repo"
+mkdir -p "${work}/nested"
+cd "${work}"
+git init --quiet -b main .
+git config user.email t@example.invalid
+git config user.name Test
+
+printf '#!/usr/bin/env bash\necho hi\n' > a-script
+printf '#!/bin/bash\necho hi\n' > nested/other-script
+printf '# a sourced library\n' > helpers.bash
+printf '#!/usr/bin/env -S cinc exec ruby\nputs 1\n' > a-ruby-script
+printf '#!/usr/bin/env python3\nprint(1)\n' > a-python-script
+printf 'plain text\n' > README.md
+chmod +x a-script nested/other-script a-ruby-script a-python-script
+git add -A
+git commit --quiet -m fixtures
+printf '#!/usr/bin/env bash\necho untracked\n' > untracked-script
+
+check_shell() { env PATH="${tmp}/bin:${PATH}" STUB_DIR="${tmp}" "$@" "${scripts}/check-shell"; }
+
+section "check-shell, what it decides to check"
+
+run check_shell env
+expect_pass 'a clean tree passes'
+expect_out 'a-script' 'a bash shebang is picked up'
+expect_out 'nested/other-script' 'at any depth, and /bin/bash counts too'
+expect_out 'helpers.bash' 'a sourced library with no shebang is picked up by extension'
+expect_no_out 'a-ruby-script' 'another interpreter is not'
+expect_no_out 'a-python-script' 'nor python'
+expect_no_out 'README.md' 'nor a data file'
+expect_no_out 'untracked-script' 'and an untracked file is not checked'
+
+if grep -q -- '-x' "${tmp}/docker-args"; then
+  ok 'shellcheck is asked to follow sourced files'
+else
+  bad "it was called with $(tr '\n' ' ' < "${tmp}/docker-args")"
+fi
+
+if grep -q 'koalaman/shellcheck:v[0-9.]*@sha256:' "${tmp}/docker-args"; then
+  ok 'and runs in a container pinned by tag and digest'
+else
+  bad "it was called with $(tr '\n' ' ' < "${tmp}/docker-args")"
+fi
+
+section "check-shell, failure modes"
+
+run check_shell env STUB_DOCKER=bad
+expect_status 1 'a shellcheck finding fails the lint'
+
+run env PATH="${tmp}/empty:/usr/bin:/bin" STUB_DIR="${tmp}" "${scripts}/check-shell"
+expect_status 1 'a missing docker fails rather than passing on nothing'
+expect_out 'docker is required' 'explains why'
+
+empty="${tmp}/empty-repo"
+mkdir -p "${empty}"
+git -C "${empty}" init --quiet -b main .
+cd "${empty}"
+run check_shell env
+expect_status 1 'a tree with no shell scripts fails, since that means detection broke'
+expect_out 'No shell scripts found' 'explains why'
+cd "${work}"
+
+section "check-workflows"
+
+run env PATH="${tmp}/bin:${PATH}" STUB_DIR="${tmp}" "${scripts}/check-workflows"
+expect_pass 'a clean workflow passes'
+if grep -q 'rhysd/actionlint:[0-9.]*@sha256:' "${tmp}/docker-args"; then
+  ok 'the container is pinned by tag and digest rather than latest'
+else
+  bad "docker was called with $(tr '\n' ' ' < "${tmp}/docker-args")"
+fi
+
+run env PATH="${tmp}/bin:${PATH}" STUB_DIR="${tmp}" STUB_DOCKER=bad "${scripts}/check-workflows"
+expect_status 1 'an actionlint finding fails the lint'
+
+run env PATH="${tmp}/empty:/usr/bin:/bin" STUB_DIR="${tmp}" "${scripts}/check-workflows"
+expect_status 1 'a missing docker fails rather than passing on nothing'
+expect_out 'docker is required' 'explains why'
+
+section "check-shell mutations (each must turn a red case green)"
+
+mut="${tmp}/mut-check-shell"
+python3 - "${scripts}/check-shell" "${mut}" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+old = """if ((${#files[@]} == 0)); then
+  echo "::error::No shell scripts found to check."
+  exit 1
+fi"""
+assert old in s
+open(sys.argv[2], 'w').write(s.replace(old, ':'))
+PY
+chmod +x "${mut}"
+cd "${empty}"
+run env PATH="${tmp}/bin:${PATH}" STUB_DIR="${tmp}" "${mut}"
+cd "${work}"
+expect_no_out 'No shell scripts found' 'without the guard, nothing reports that nothing was checked'
+if ((BASH_VERSINFO[0] >= 4)); then
+  # Under bash 5, which is what the runners have, the empty expansion is legal
+  # and the mutant reports success having linted nothing at all.
+  expect_pass 'and under bash 4 or later it passes outright'
+else
+  # bash 3.2, which macOS ships, errors on an empty array under set -u, so the
+  # mutant dies for an unrelated reason here.
+  expect_status 1 'and under bash 3.2 it dies on the empty expansion instead'
+fi
+
+summary

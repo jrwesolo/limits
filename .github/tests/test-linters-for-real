@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# The two containerised linters against real findings, with no stubs.
+#
+# test-lint-scripts stubs docker, so it proves the wrapper propagates an exit
+# status but says nothing about whether the linter inside catches anything.
+# This suite runs the real containers over a real copy of the repository and
+# mutates it, one defect at a time.
+#
+# Needs docker and the network on a cold cache. Skipped when docker is absent.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+scripts="$(repo_root)/.github/scripts"
+
+if ! command -v docker >/dev/null || ! docker version >/dev/null 2>&1; then
+  echo "  skipped: docker is not available"
+  summary
+  exit 0
+fi
+
+tmp="$(mktemp -d "${TMPDIR_FOR_DOCKER:-/private/tmp}/lintXXXXXX")"
+trap 'rm -rf "${tmp}"' EXIT
+work="${tmp}/repo"
+mkdir -p "${work}"
+git -C "$(repo_root)" archive HEAD | tar -x -C "${work}"
+cd "${work}"
+git init --quiet -b main .
+git config user.email t@example.invalid
+git config user.name Test
+git add -A
+git commit --quiet -m fixtures
+
+# Applies a literal substitution and refuses to continue unless it landed. A
+# mutation that quietly did nothing looks exactly like a clean tree, and the
+# check under test would then be credited with a pass it never earned.
+mutate() {
+  mutate_file "$1" "$2" "$3"
+  settle "$1"
+}
+
+# Waits until a container sees the file at the length the host has. On macOS a
+# bind mount serves the previous size for a moment after a write, so a linter
+# started inside that window reads the file truncated to where it used to end.
+# That shows up as a parse error at the cut, and for a defect added near the
+# end of a file it shows up as a pass, which is the dangerous half.
+settle() {
+  local file=$1 want got
+  want="$(wc -c < "${file}" | tr -d ' ')"
+  for _ in $(seq 1 20); do
+    # `|| true` because a container that cannot see the file yet exits
+    # non-zero, and under `set -e` a failing command substitution in an
+    # assignment ends the script before the retry below can run.
+    got="$( (docker run --rm --volume "${PWD}:/m" --workdir /m debian:13 \
+      sh -c "wc -c < '${file}'" 2>/dev/null || true) | tr -d ' ')"
+    if [[ ${got} == "${want}" ]]; then return 0; fi
+  done
+  bad "the container never saw ${file} at ${want} bytes, last saw ${got}"
+  return 1
+}
+
+wf=.github/workflows/ci.yml
+
+restore() {
+  git checkout -q -- . && git clean -qfd
+  settle "${wf}"
+}
+
+section "actionlint, on real defects"
+
+run "${scripts}/check-workflows"
+expect_pass 'the workflows as committed are clean'
+
+mutate "${wf}" 'needs: [lint, unit, integration-gate]' 'needs: [lint, unit, integration-gat]'
+run "${scripts}/check-workflows"
+expect_status 1 'a job depending on a job that does not exist is caught'
+expect_out 'does not exist in this workflow' 'and named as such'
+restore
+
+mutate "${wf}" 'runs-on: ubuntu-latest' 'runs-on: ubuntu-lastest'
+run "${scripts}/check-workflows"
+expect_status 1 'a misspelled runner label is caught'
+expect_out 'is unknown' 'rather than queueing forever against a label nobody has'
+restore
+
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate "${wf}" '        run: .github/scripts/check-needs' \
+  '        run: |
+          echo $SPLAT_ME
+          .github/scripts/check-needs'
+run "${scripts}/check-workflows"
+expect_status 1 'a shell bug inside a run block is caught'
+expect_out 'shellcheck reported issue' 'by the shellcheck actionlint carries'
+restore
+
+# actionlint exits 3 rather than 0 when it finds no workflow to read, so the
+# wrapper needs no empty guard of its own. check-shell does need one, since a
+# run of shellcheck given no files would have nothing to complain about. That
+# sentence is worded to keep the linter's own name off the start of a comment
+# line, where it is read as a directive instead of as prose.
+rm -rf .github/workflows
+run "${scripts}/check-workflows"
+# 3 is actionlint's own exit when it finds no workflow files at all, and the
+# only stable fact here. Which sentence it prints, "no YAML file was found in
+# .github/workflows" or "no project was found in any parent directories",
+# depends on whether the bind mount is yet showing the container that the
+# directory has gone, so asserting either one tests the mount rather than
+# actionlint.
+expect_status 3 'a tree with no workflows fails rather than passing on nothing'
+restore
+
+section "shellcheck, on real defects"
+
+run "${scripts}/check-shell"
+expect_pass 'the scripts as committed are clean'
+
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate .github/scripts/check-needs 'set -euo pipefail' 'set -euo pipefail
+unquoted=$1
+echo $unquoted'
+run "${scripts}/check-shell"
+expect_status 1 'an unquoted expansion is caught'
+expect_out 'SC2086' 'as SC2086'
+restore
+
+# -x is what makes this one fail. Without following the source, the callers
+# would only draw SC2154 for a variable shellcheck cannot see assigned.
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate .github/scripts/lib.bash 'set_output() {' 'set_output() {
+  local unused_but_broken=$( echo "$1" )'
+run "${scripts}/check-shell"
+expect_status 1 'a finding inside a sourced library is caught through -x'
+restore
+
+summary

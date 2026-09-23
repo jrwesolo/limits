@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# The integration gate: anything other than success has to be a failure.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+check_needs="$(repo_root)/.github/scripts/check-needs"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+with_needs() { NEEDS="$1" "${check_needs}"; }
+
+section "check-needs"
+
+# Captured from a real gate job rather than written by hand. The context
+# carries an `outputs` object per job and arrives pretty-printed, neither of
+# which a guessed fixture had. check-needs reads only `.result`, so it makes no
+# difference here, but the fixture should be a sample and not an assumption.
+REAL_SUCCESS='{
+  "discover": {
+    "result": "success",
+    "outputs": {
+      "instances": "[\"cinc-19-debian-13\",\"cinc-18-ubuntu-2404\"]"
+    }
+  },
+  "integration": {
+    "result": "success",
+    "outputs": {}
+  }
+}'
+REAL_FAILURE='{
+  "discover": {
+    "result": "success",
+    "outputs": {
+      "instances": "[\"cinc-19-debian-13\",\"cinc-18-ubuntu-2404\"]"
+    }
+  },
+  "integration": {
+    "result": "failure",
+    "outputs": {}
+  }
+}'
+
+run with_needs "${REAL_SUCCESS}"
+expect_pass 'the context a real gate job is handed passes'
+expect_out 'All required jobs succeeded.' 'says so'
+
+run with_needs "${REAL_FAILURE}"
+expect_status 1 'and fails on that same shape with a failed matrix'
+expect_out '::error::' 'annotates the failure'
+
+run with_needs '{"discover":{"result":"success"},"integration":{"result":"success"}}'
+expect_pass 'all success passes'
+expect_out 'All required jobs succeeded.' 'says so'
+
+run with_needs '{"discover":{"result":"success"},"integration":{"result":"failure"}}'
+expect_status 1 'a failed matrix fails the gate'
+expect_out '::error::' 'annotates the failure'
+expect_out 'One or more required jobs did not succeed' 'and says what went wrong'
+
+run with_needs '{"discover":{"result":"success"},"integration":{"result":"skipped"}}'
+expect_status 1 'a skipped matrix fails the gate rather than reading as passed'
+
+run with_needs '{"discover":{"result":"skipped"},"integration":{"result":"skipped"}}'
+expect_status 1 'a discover that never ran fails the gate'
+
+run with_needs '{"discover":{"result":"success"},"integration":{"result":"cancelled"}}'
+expect_status 1 'a cancelled matrix fails the gate'
+
+run with_needs '{"a":{"result":"success"},"b":{"result":"failure"},"c":{"result":"success"}}'
+expect_status 1 'one failure among several still fails'
+expect_out 'b                        failure' 'each job is reported, aligned'
+
+run env -u NEEDS "${check_needs}"
+expect_status 1 'an unset NEEDS fails rather than passing vacuously'
+
+run with_needs 'not json'
+# jq's own exit on input it cannot parse, propagated by set -e.
+expect_status "${JQ_PARSE_STATUS}" 'unparseable input fails'
+expect_no_out 'All required jobs succeeded.' 'unparseable input is not reported as success'
+
+# Documents current behaviour: an empty needs context has nothing to fail on.
+# Unreachable from the workflow, where needs always carries discover and
+# integration, but worth knowing which way it falls.
+run with_needs '{}'
+expect_pass 'an empty needs context passes (nothing declared, nothing to check)'
+
+section "check-needs mutations (each must turn a red case green)"
+
+mutate() { mutant_of "${check_needs}" "$1" "$2" "$3"; }
+
+# The fail-open this suite found: jq read straight into the loop by process
+# substitution, so input it cannot parse yields no lines and no failures.
+python3 - "${check_needs}" "${tmp}/mut-procsub" <<'MUT'
+import re, sys
+body = open(sys.argv[1]).read()
+# Drop the assignment and read jq straight into the loop, which is the shape
+# that hid its exit status.
+body = re.sub(r'results="\$\(jq[^\n]*\n', '', body)
+body = body.replace('done <<<"${results}"',
+                    'done < <(jq -r \'to_entries[] | "\\(.key) \\(.value.result)"\' <<<"${NEEDS}")')
+open(sys.argv[2], 'w').write(body)
+MUT
+chmod +x "${tmp}/mut-procsub"
+run env NEEDS='not json' "${tmp}/mut-procsub"
+expect_pass 'reading jq through a process substitution hides its failure'
+expect_out 'All required jobs succeeded.' 'and reports a pass on input it never read'
+
+# The subshell bug: a pipeline runs the loop in a subshell, so failed=1 is lost.
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate "${tmp}/mut-pipeline" \
+  'done <<<"${results}"' \
+  'done < <(printf '"'"'%s\n'"'"' "${results}")'
+run env NEEDS='{"integration":{"result":"failure"}}' "${tmp}/mut-pipeline"
+expect_status 1 'redirection from a process substitution still keeps the count'
+
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate "${tmp}/mut-subshell" \
+  'while read -r job result; do' \
+  'printf '"'"'%s\n'"'"' "${results}" | while read -r job result; do'
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate_file "${tmp}/mut-subshell" 'done <<<"${results}"' 'done'
+run env NEEDS='{"integration":{"result":"failure"}}' "${tmp}/mut-subshell"
+expect_pass 'feeding the loop by pipeline loses the count and wrongly passes'
+
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate "${tmp}/mut-skipped" \
+  '[[ ${result} == success ]]' \
+  '[[ ${result} == success || ${result} == skipped ]]'
+run env NEEDS='{"integration":{"result":"skipped"}}' "${tmp}/mut-skipped"
+expect_pass 'treating skipped as success wrongly passes'
+
+# The guard that keeps an empty needs context from reading as a blank job.
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate "${tmp}/mut-guard" \
+  '  [[ -n ${job} ]] || continue' \
+  '  :'
+run env NEEDS='{}' "${tmp}/mut-guard"
+expect_status 1 'without the empty-line guard, an empty context fails on a blank job'
+
+summary

@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# check-version and list-payload end to end on the real branch, with only gh
+# stubbed. This is the shape the version job runs in.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+
+# Cinc, and one that runs. `command -v` is not enough: a cinc on PATH that
+# cannot execute produces a wall of failures that all mean "no toolchain" and
+# bury anything real, which is what a broken install looks like from here.
+if ! cinc exec ruby -e '' >/dev/null 2>&1; then
+  echo "  skipped: cinc is not available"
+  summary
+  exit 0
+fi
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+mkdir -p "${tmp}/bin"
+cat > "${tmp}/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# Answers the way gh does, since tag_exists tells a 404 apart from a request
+# that failed.
+case ${STUB_TAG_EXISTS:-no} in
+  yes) echo '{"ref":"refs/tags/v1.0.0"}' ;;
+  *)   echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+esac
+STUB
+chmod +x "${tmp}/bin/gh"
+
+clone="${tmp}/limits"
+# The commit under test is taken from the checkout rather than named. A branch
+# name outlives its branch only for as long as somebody's local clone keeps it,
+# so naming one meant this suite went on passing after the branch was merged
+# and deleted, on the strength of a stale local ref.
+subject="$(git -C "$(repo_root)" rev-parse HEAD)"
+git clone --quiet "$(repo_root)" "${clone}"
+cd "${clone}"
+git checkout --quiet --detach "${subject}"
+git config user.email t@example.invalid
+git config user.name Test
+
+# Read from the checkout rather than written here, because this suite runs
+# against whatever the cookbook is at and a release turns yesterday's literal
+# into a failure that says nothing. Read with sed rather than through
+# lib.bash: computing the expected answer with the code under test would let
+# a broken parser move both sides together and still look green.
+current="$(sed -n "s/^version[[:space:]]*'\\([^']*\\)'.*/\\1/p" metadata.rb | head -1)"
+[[ -n ${current} ]] || { bad 'could not read the version from metadata.rb'; summary; exit 1; }
+
+# The next minor. It only has to be a version this cookbook has not released,
+# and whether its tag exists is decided by the gh stub rather than by reality.
+next="$(awk -F. '{ printf "%d.%d.0", $1, $2 + 1 }' <<<"${current}")"
+
+# Any owner/name will do: gh is stubbed, so nothing resolves it. A real one
+# invites the reader to believe the suite talks to that repository.
+check() {
+  env PATH="${tmp}/bin:${PATH}" BASE_REF=main \
+      GITHUB_REPOSITORY=example/cookbook GH_TOKEN=x \
+      "$@" .github/scripts/check-version
+}
+
+section "the checkout as it stands"
+
+run check env
+expect_pass 'it passes: no bump, and its payload matches main'
+expect_out "metadata.rb: ${current} (main: ${current})" 'reports both versions'
+expect_out 'nothing that would be published changed' 'reports the payload is identical'
+
+section "a payload change with no version bump"
+
+# The example: stop ignoring the changelog, and it starts shipping.
+delete_lines chefignore '^CHANGELOG\*$'
+git commit --quiet -am 'publish the changelog'
+run check env
+expect_status 1 'dropping CHANGELOG* from chefignore fails the check'
+expect_out 'The published cookbook changes but the version does not' 'explains why'
+expect_out 'CHANGELOG.md' 'names the file that starts shipping'
+git reset --quiet --hard HEAD~1
+
+run check env
+expect_pass 'restoring chefignore passes again'
+
+echo '' >> README.md
+git commit --quiet -am 'edit the readme'
+run check env
+expect_status 1 'editing a file that ships fails the check'
+expect_out 'README.md' 'names it'
+git reset --quiet --hard HEAD~1
+
+echo '' >> CONTRIBUTING.md
+git commit --quiet -am 'edit a file chefignore excludes'
+run check env
+expect_pass 'editing a file that does not ship is fine'
+git reset --quiet --hard HEAD~1
+
+echo '# a comment' >> .github/scripts/check-needs
+git commit --quiet -am 'edit a CI script'
+run check env
+expect_pass 'editing CI tooling is fine, none of it ships'
+git reset --quiet --hard HEAD~1
+
+git rm --quiet CONTRIBUTING.md
+git commit --quiet -m 'delete a file that does not ship'
+run check env
+expect_pass 'deleting a file that does not ship is fine'
+git reset --quiet --hard HEAD~1
+
+git rm --quiet README.md
+git commit --quiet -m 'delete a file that ships'
+run check env
+expect_status 1 'deleting a file that ships fails the check'
+expect_out 'README.md' 'names it'
+git reset --quiet --hard HEAD~1
+
+section "the same changes, with a bump"
+
+bump_to() {
+  replace_re metadata.rb "^version([ \t]*)'[^']*'" "version\\1'$1'"
+}
+
+bump_to "${next}"
+delete_lines chefignore '^CHANGELOG\*$'
+git commit --quiet -am 'publish the changelog under a new version'
+run check env
+expect_status 1 'a bump with no changelog entry still fails'
+expect_out "Newest entry is 'v${current}'" 'names what the changelog says'
+
+replace_re CHANGELOG.md '\A([^\n]*\n=+\n\n)' "\\1[v${next}]\\n--------\\n\\n- A thing\\n\\n"
+mutate_file CHANGELOG.md "[v${current}]: " "[v${next}]: https://example.invalid/${next}
+[v${current}]: "
+git commit --quiet -am 'document it'
+run check env
+expect_pass 'a documented, untagged bump passes with the payload changed'
+expect_out "v${next} is unreleased" 'says so'
+
+run check env STUB_TAG_EXISTS=yes
+expect_status 1 'the same bump fails when the tag already exists'
+expect_out 'already tagged' 'explains why'
+
+git reset --quiet --hard HEAD~2
+
+section "the toolchain guard"
+
+# A cinc that cannot run, rather than a PATH with cinc left off it. Where the
+# toolchain is installed differs between a workstation and a container that
+# ships it, so a directory list that drops it on one keeps it on the other:
+# this case passed for the wrong reason in the Cinc image, where /usr/bin/cinc
+# is a symlink and survived the strip. What the guard is about is list-payload
+# failing, and shadowing cinc produces that wherever it is installed.
+broken="${tmp}/broken"
+mkdir -p "${broken}"
+printf '#!/bin/sh\necho "cinc: not available" >&2\nexit 127\n' > "${broken}/cinc"
+chmod +x "${broken}/cinc"
+
+# Bash remembers where it found a command and `command -v` reports what it
+# remembers, so any earlier call in this shell, the toolchain check at the top
+# for one, makes the lookup below answer with the real cinc no matter what
+# PATH now says. Forget the table first, or this case silently stops testing
+# the stub.
+hash -r
+
+if [[ "$(PATH="${broken}:${PATH}" command -v cinc)" != "${broken}/cinc" ]]; then
+  bad 'the toolchain guard cannot be exercised: cinc did not resolve to the stub'
+else
+  ok 'cinc resolves to a stub that cannot run'
+  run env PATH="${broken}:${tmp}/bin:${PATH}" BASE_REF=main \
+      GITHUB_REPOSITORY=example/cookbook GH_TOKEN=x \
+      .github/scripts/check-version
+  expect_status 1 'a toolchain that cannot run fails the check rather than passing blind'
+  expect_out 'Could not determine what would be published' 'explains why'
+fi
+
+section "a base branch that cannot be fetched"
+
+# Without the guard this is exit 128 carrying git's message and no annotation,
+# which is the failure shape the rest of this file exists to prevent.
+run env PATH="${tmp}/bin:${PATH}" BASE_REF=no-such-branch \
+    GITHUB_REPOSITORY=example/cookbook GH_TOKEN=x \
+    .github/scripts/check-version
+expect_status 1 'a base branch that is not there fails with an annotation'
+expect_out '::error::Could not fetch no-such-branch' 'names the branch it wanted'
+expect_out "couldn't find remote ref" 'carries what git said'
+
+summary

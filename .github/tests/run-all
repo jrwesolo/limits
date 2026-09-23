@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Runs every CI check suite. REPO_ROOT defaults to the checkout this file is
+# in, derived from its own location rather than written out, so it is right on
+# any machine and carries nobody's home directory.
+set -uo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export REPO_ROOT="${REPO_ROOT:-$(cd "${here}/../.." && pwd)}"
+
+# The first `cinc exec` in an environment that has no ~/.cinc writes that
+# directory and prints a bare newline to standard output while doing it. Every
+# call after it is clean. A suite that parses the output of the first one sees
+# a blank line ahead of the answer, which is a property of the toolchain and
+# not of the script under test, so pay it here where nothing is reading.
+if command -v cinc >/dev/null; then
+  cinc exec ruby -e '' >/dev/null 2>&1 || true
+fi
+
+rc=0
+for t in test-lib test-check-needs test-check-version test-list-payload \
+         test-list-instances test-release-publish test-lint-scripts \
+         test-check-renovate test-linters-for-real \
+         test-detect-platform test-install-cinc \
+         test-e2e; do
+  printf '\n\033[1;34m== %s ==\033[0m\n' "${t}"
+  "${here}/${t}" || rc=1
+done
+exit ${rc}

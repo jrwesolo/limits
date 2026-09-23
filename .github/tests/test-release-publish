@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# The release path: every guard it has, and the annotations they print.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+scripts="$(repo_root)/.github/scripts"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+sandbox="${tmp}/scripts"
+mkdir -p "${sandbox}" "${tmp}/bin"
+cp "${scripts}/release" "${scripts}/publish" "${scripts}/lib.bash" "${sandbox}/"
+
+# gh answers two questions here: whether a tag exists, and a release creation.
+cat > "${tmp}/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case $1 in
+  api)
+    case ${STUB_TAG_EXISTS:-no} in
+      yes)    echo '{"ref":"refs/tags/v1.0.0"}' ;;
+      broken) echo 'error connecting to api.github.com' >&2; exit 1 ;;
+      *)      echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+    esac
+    ;;
+  release) cat > "${STUB_DIR}/release-notes"; printf '%s\n' "$@" > "${STUB_DIR}/release-args" ;;
+esac
+STUB
+chmod +x "${tmp}/bin/gh"
+
+work="${tmp}/repo"
+mkdir -p "${work}"
+cd "${work}"
+git init --quiet -b main .
+git config user.email t@example.invalid
+git config user.name Test
+
+metadata() { printf "name 'limits'\nversion '%s'\n" "$1" > metadata.rb; }
+changelog() {
+  printf 'Changelog\n=========\n\n[%s]\n--------\n\n- A thing\n\n[%s]: https://example.invalid/\n' "$1" "$1" > CHANGELOG.md
+}
+
+metadata 1.0.0
+changelog v1.0.0
+git add -A
+git commit --quiet -m base
+git remote add origin "file://${work}"
+
+release() { env PATH="${tmp}/bin:${PATH}" GITHUB_REPOSITORY=o/r GITHUB_SHA="$(git rev-parse HEAD)" \
+  GH_TOKEN=x STUB_DIR="${tmp}" "$@" "${sandbox}/release"; }
+publish() { env PATH="${tmp}/bin:${PATH}" SUPERMARKET_USER=u SUPERMARKET_KEY=k \
+  STUB_DIR="${tmp}" "$@" "${sandbox}/publish"; }
+
+section "release"
+
+run release env STUB_TAG_EXISTS=yes
+expect_pass 'an already tagged version releases nothing'
+expect_out 'already tagged' 'and says so'
+
+run release env
+expect_pass 'an untagged, documented version releases'
+expect_out 'Releasing v1.0.0' 'says what it is releasing'
+if grep -q 'A thing' "${tmp}/release-notes"; then
+  ok 'the changelog section becomes the release notes'
+else
+  bad "notes were '$(cat "${tmp}/release-notes" 2>/dev/null)'"
+fi
+
+run release env STUB_TAG_EXISTS=broken
+expect_status 1 'a release stops when GitHub cannot be asked whether the tag exists'
+expect_out 'Could not ask GitHub' 'rather than tagging a second time'
+
+changelog v9.9.9
+run release env
+expect_status 1 'a version with no changelog section fails'
+expect_out 'No changelog section found' 'explains why'
+changelog v1.0.0
+
+printf "name 'limits'\n" > metadata.rb
+run release env
+expect_status 1 'metadata with no version fails'
+expect_out 'Could not parse the version' 'and says so rather than exiting silently'
+metadata 1.0.0
+
+section "publish"
+
+printf "name 'limits'\n" > metadata.rb
+run publish env
+expect_status 1 'metadata with no version fails'
+expect_out 'Could not parse the version' 'and says so rather than exiting silently'
+metadata 1.0.0
+
+run publish env
+expect_status 1 'a version with no tag fails'
+expect_out 'is not tagged' 'explains why'
+
+# A tag whose metadata declares no name.
+git commit --quiet --allow-empty -m 'tagged commit'
+printf "version '1.0.0'\n" > metadata.rb
+git commit --quiet -am 'nameless metadata'
+git tag v1.0.0
+metadata 1.0.0
+git commit --quiet -am 'restore the working tree'
+run publish env
+expect_status 1 'a tag carrying no cookbook name fails'
+expect_out 'carries no parseable cookbook name' 'explains why'
+
+git tag -d v1.0.0 >/dev/null
+printf "name 'limits'\nversion '9.9.9'\n" > metadata.rb
+git commit --quiet -am 'a tag declaring another version'
+git tag v1.0.0
+metadata 1.0.0
+git commit --quiet -am 'restore the working tree again'
+run publish env
+expect_status 1 'a tag declaring a different version fails'
+expect_out 'declares version 9.9.9, not 1.0.0' 'names both versions'
+
+section "release and publish mutations (each must turn a red case green)"
+
+mut="${tmp}/mut"
+mkdir -p "${mut}"
+cp "${sandbox}/lib.bash" "${mut}/"
+
+python3 - "${sandbox}/release" "${mut}/release" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+old = 'if ! version="$(cookbook_version)" || [[ -z ${version} ]]; then'
+new = 'version="$(cookbook_version)"\nif [[ -z ${version} ]]; then'
+assert old in s
+open(sys.argv[2], 'w').write(s.replace(old, new))
+PY
+chmod +x "${mut}/release"
+printf "name 'limits'\n" > metadata.rb
+run env PATH="${tmp}/bin:${PATH}" GITHUB_REPOSITORY=o/r GITHUB_SHA=abc GH_TOKEN=x "${mut}/release"
+expect_status 1 'the assignment outside the condition still fails'
+expect_no_out 'Could not parse the version' 'but prints nothing, which is the bug'
+
+python3 - "${sandbox}/publish" "${mut}/publish" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+old = 'if ! name="$(cookbook_name <(printf \'%s\\n\' "${metadata}"))" || [[ -z ${name} ]]; then'
+new = 'name="$(cookbook_name <(printf \'%s\\n\' "${metadata}"))"\nif [[ -z ${name} ]]; then'
+assert old in s
+open(sys.argv[2], 'w').write(s.replace(old, new))
+PY
+chmod +x "${mut}/publish"
+git tag -d v1.0.0 >/dev/null
+printf "version '1.0.0'\n" > metadata.rb
+git commit --quiet -am 'nameless metadata again'
+git tag v1.0.0
+metadata 1.0.0
+git commit --quiet -am 'restore'
+run env PATH="${tmp}/bin:${PATH}" SUPERMARKET_USER=u SUPERMARKET_KEY=k "${mut}/publish"
+expect_status 1 'the same shape in publish still fails'
+expect_no_out 'carries no parseable cookbook name' 'but prints nothing, which is the bug'
+
+summary

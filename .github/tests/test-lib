@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+# cookbook_field, changelog_notes and set_output, red and green.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+scripts="$(repo_root)/.github/scripts"
+# shellcheck disable=SC1091
+source "${scripts}/lib.bash"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+section "lib.bash cookbook_field"
+
+cat > "${tmp}/good.rb" <<'META'
+name 'limits'
+maintainer 'Someone'
+version '3.1.0'
+META
+run cookbook_name "${tmp}/good.rb"
+expect_pass 'name parses'
+if [[ ${LAST_OUT} == limits ]]; then
+  ok "name is 'limits'"
+else
+  bad "name was '${LAST_OUT}'"
+fi
+
+run cookbook_version "${tmp}/good.rb"
+expect_pass 'version parses'
+if [[ ${LAST_OUT} == 3.1.0 ]]; then
+  ok "version is '3.1.0'"
+else
+  bad "version was '${LAST_OUT}'"
+fi
+
+# The bug the rewrite fixed: sed printed one line per match, the caller reads one value.
+printf "version '3.1.0'\nversion '9.9.9'\n" > "${tmp}/twice.rb"
+run cookbook_version "${tmp}/twice.rb"
+expect_pass 'a field declared twice still succeeds'
+if [[ ${LAST_OUT} == 3.1.0 ]]; then
+  ok 'only the first value is printed'
+else
+  bad "got '${LAST_OUT}'"
+fi
+
+# Red for the old implementation, proving the case discriminates.
+old_version() { sed -n "s/^version[[:space:]]*'\([^']*\)'.*/\1/p" "$1"; }
+run old_version "${tmp}/twice.rb"
+if [[ $(printf '%s' "${LAST_OUT}" | wc -l) -ge 1 ]]; then
+  ok 'the replaced sed implementation returns both values (mutation is red)'
+else
+  bad 'mutation did not reproduce the old behaviour'
+fi
+
+printf "name 'limits'\n" > "${tmp}/noversion.rb"
+run cookbook_version "${tmp}/noversion.rb"
+expect_status 1 'a missing field fails rather than printing nothing and succeeding'
+
+printf 'version "3.1.0"\n' > "${tmp}/doublequoted.rb"
+run cookbook_version "${tmp}/doublequoted.rb"
+expect_status 1 'a double-quoted value is not accepted'
+
+printf "  version '3.1.0'\n" > "${tmp}/indented.rb"
+run cookbook_version "${tmp}/indented.rb"
+expect_status 1 'an indented declaration is not accepted (anchored at the line start)'
+
+printf "versionfoo '9.9.9'\nversion '3.1.0'\n" > "${tmp}/prefix.rb"
+run cookbook_version "${tmp}/prefix.rb"
+if [[ ${LAST_OUT} == 3.1.0 ]]; then
+  ok 'a field whose name is a prefix does not match'
+else
+  bad "got '${LAST_OUT}'"
+fi
+
+run cookbook_version "${tmp}/absent.rb"
+expect_status 1 'a missing file fails'
+
+section "lib.bash changelog_notes"
+
+cat > "${tmp}/CHANGELOG.md" <<'CL'
+Changelog
+=========
+
+[v3.1.0]
+--------
+
+- Newest thing
+- Another thing
+
+[v3.0.0]
+--------
+
+- Older thing
+
+[v3.1.0]: https://example.invalid/3.1.0
+[v3.0.0]: https://example.invalid/3.0.0
+CL
+run changelog_notes v3.1.0 "${tmp}/CHANGELOG.md"
+expect_out '- Newest thing' 'notes carry the section body'
+expect_no_out '- Older thing' 'notes stop at the next version heading'
+expect_no_out '[v3.1.0]' 'notes drop the heading and its underline'
+
+run changelog_notes v3.0.0 "${tmp}/CHANGELOG.md"
+expect_out '- Older thing' 'the oldest section is bounded by the link block'
+expect_no_out 'https://' 'the link reference block is not part of the notes'
+
+run changelog_notes v9.9.9 "${tmp}/CHANGELOG.md"
+if [[ -z ${LAST_OUT} ]]; then
+  ok 'an unknown tag yields nothing'
+else
+  bad "got '${LAST_OUT}'"
+fi
+
+section "lib.bash tag_exists"
+
+mkdir -p "${tmp}/bin"
+cat > "${tmp}/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case ${STUB_GH:-notfound} in
+  found)     echo '{"ref":"refs/tags/v1.0.0"}' ;;
+  notfound)  echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+  ratelimit) echo 'gh: API rate limit exceeded (HTTP 403)' >&2; exit 1 ;;
+  *)         echo 'error connecting to api.github.com' >&2; exit 1 ;;
+esac
+STUB
+chmod +x "${tmp}/bin/gh"
+
+ask() {
+  env PATH="${tmp}/bin:${PATH}" GITHUB_REPOSITORY=o/r STUB_GH="$1" \
+    bash -c "source '${scripts}/lib.bash'; tag_exists v1.0.0"
+}
+
+run ask found
+expect_pass 'an existing tag succeeds'
+
+run ask notfound
+expect_status 1 'a 404 means the tag is absent'
+expect_no_out 'Could not ask GitHub' 'and is not reported as an error'
+
+run ask broken
+expect_status 1 'a request that fails does not read as an absent tag'
+expect_out 'Could not ask GitHub' 'and says what happened'
+
+run ask ratelimit
+expect_status 1 'a rate limit does not read as an absent tag either'
+expect_out 'rate limit' 'and carries what GitHub said'
+
+old_tag_exists() {
+  # shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+  env PATH="${tmp}/bin:${PATH}" GITHUB_REPOSITORY=o/r STUB_GH="$1" \
+    bash -c 'gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v1.0.0" >/dev/null 2>&1'
+}
+run old_tag_exists broken
+expect_status 1 'the replaced implementation also returns non-zero here'
+expect_no_out 'Could not ask GitHub' 'but silently, which reads as an absent tag (the case above is red)'
+
+section "lib.bash set_output"
+
+out="${tmp}/github_output"
+: > "${out}"
+GITHUB_OUTPUT="${out}" set_output 'released=true'
+if grep -qx 'released=true' "${out}"; then
+  ok 'writes key=value to GITHUB_OUTPUT'
+else
+  bad 'nothing written'
+fi
+
+unset GITHUB_OUTPUT
+run set_output 'released=true'
+expect_pass 'outside Actions it is a no-op rather than an error'
+
+summary

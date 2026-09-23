@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# The cache key the setup-cinc action builds.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+detect="$(repo_root)/.github/actions/setup-cinc/detect-platform"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+out="${tmp}/github_output"
+
+detect_with() {
+  : > "${out}"
+  env GITHUB_OUTPUT="${out}" "$@" "${detect}"
+}
+
+section "detect-platform"
+
+cat > "${tmp}/os-release" <<'OSR'
+NAME="Ubuntu"
+ID=ubuntu
+VERSION_ID="24.04"
+OSR
+run detect_with env OS_RELEASE="${tmp}/os-release"
+expect_pass 'an os-release is read'
+if grep -qx 'id=ubuntu-24.04' "${out}"; then
+  ok 'the key is the id and the version, which is what the package URL is'
+else
+  bad "output was '$(cat "${out}")'"
+fi
+
+cat > "${tmp}/os-release" <<'OSR'
+ID=ubuntu
+VERSION_ID="26.04"
+OSR
+run detect_with env OS_RELEASE="${tmp}/os-release"
+if grep -qx 'id=ubuntu-26.04' "${out}"; then
+  ok 'a new release yields a different key, so the old package is not reused'
+else
+  bad "output was '$(cat "${out}")'"
+fi
+
+cat > "${tmp}/os-release" <<'OSR'
+ID=ubuntu
+OSR
+run detect_with env OS_RELEASE="${tmp}/os-release"
+if grep -qx 'id=ubuntu-unknown' "${out}"; then
+  ok 'a missing VERSION_ID degrades rather than producing a bare id'
+else
+  bad "output was '$(cat "${out}")'"
+fi
+
+run detect_with env OS_RELEASE="${tmp}/absent" ImageOS=ubuntu24
+if grep -qx 'id=ubuntu24' "${out}"; then
+  ok 'with no os-release it falls back to the GitHub image label'
+else
+  bad "output was '$(cat "${out}")'"
+fi
+
+run detect_with env -u ImageOS OS_RELEASE="${tmp}/absent"
+expect_pass 'with neither, it still reports'
+if grep -qx 'id=unknown' "${out}"; then
+  ok 'as unknown'
+else
+  bad "output was '$(cat "${out}")'"
+fi
+
+run env -u GITHUB_OUTPUT "${detect}"
+expect_status 1 'outside a workflow it fails rather than writing nowhere'
+
+printf 'existing=1\n' > "${out}"
+GITHUB_OUTPUT="${out}" OS_RELEASE="${tmp}/os-release" "${detect}" >/dev/null
+if [[ $(wc -l < "${out}") -eq 2 ]]; then
+  ok 'it appends rather than truncating the outputs file'
+else
+  bad "output file was $(cat "${out}")"
+fi
+
+summary

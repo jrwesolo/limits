@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+# check-version against a throwaway repository, with list-payload and gh stubbed
+# so that every branch is reachable without a network or a toolchain.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+scripts="$(repo_root)/.github/scripts"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+# A sandbox holds a copy of the scripts under test plus a stub list-payload,
+# which check-version addresses relative to its own path.
+sandbox="${tmp}/scripts"
+mkdir -p "${sandbox}" "${tmp}/bin"
+cp "${scripts}/check-version" "${scripts}/lib.bash" "${sandbox}/"
+
+cat > "${sandbox}/list-payload" <<'STUB'
+#!/usr/bin/env bash
+# Prints the manifest recorded for this ref, or acts out a failure mode.
+set -euo pipefail
+case ${STUB_MODE:-normal} in
+  fail)  echo 'stub: exploded' >&2; exit 1 ;;
+  empty) exit 0 ;;
+  noise) [[ $1 == FETCH_HEAD ]] && echo '' ;;
+esac
+cat "${STUB_DIR}/payload.$1"
+STUB
+chmod +x "${sandbox}/list-payload"
+
+# gh only has to answer whether a tag exists.
+cat > "${tmp}/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+# Answers the way gh does: a 404 carries its status, and a request that fails
+# carries something else entirely.
+case ${STUB_TAG_EXISTS:-no} in
+  yes)    echo '{"ref":"refs/tags/v1.0.0"}' ;;
+  broken) echo 'error connecting to api.github.com' >&2; exit 1 ;;
+  *)      echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+esac
+STUB
+chmod +x "${tmp}/bin/gh"
+
+work="${tmp}/repo"
+mkdir -p "${work}"
+cd "${work}"
+git init --quiet -b main .
+git config user.email t@example.invalid
+git config user.name Test
+cat > metadata.rb <<'META'
+name 'limits'
+version '3.1.0'
+META
+cat > CHANGELOG.md <<'CL'
+Changelog
+=========
+
+[v3.1.0]
+--------
+
+- A thing
+
+[v3.1.0]: https://example.invalid/3.1.0
+CL
+git add -A
+git commit --quiet -m base
+git remote add origin "file://${work}"
+
+# check-version reads the base from FETCH_HEAD, which the real script fetches.
+printf 'aaa\tmetadata.rb\nbbb\tREADME.md\n' > "${tmp}/payload.FETCH_HEAD"
+printf 'aaa\tmetadata.rb\nbbb\tREADME.md\n' > "${tmp}/payload.HEAD"
+
+check() {
+  env PATH="${tmp}/bin:${PATH}" \
+      BASE_REF=main GITHUB_REPOSITORY=owner/repo GH_TOKEN=x \
+      STUB_DIR="${tmp}" "$@" "${sandbox}/check-version"
+}
+
+section "check-version, version unchanged from the base"
+
+run check env
+expect_pass 'an identical payload passes'
+expect_out 'nothing that would be published changed' 'says what it checked'
+
+printf 'aaa\tmetadata.rb\nbbb\tREADME.md\nccc\tCHANGELOG.md\n' > "${tmp}/payload.HEAD"
+run check env
+expect_status 1 'a file added to the payload fails'
+expect_out 'The published cookbook changes but the version does not' 'explains why'
+expect_out 'CHANGELOG.md' 'names the file that differs'
+
+printf 'aaa\tmetadata.rb\n' > "${tmp}/payload.HEAD"
+run check env
+expect_status 1 'a file removed from the payload fails'
+expect_out 'README.md' 'names the file that differs'
+
+printf 'aaa\tmetadata.rb\nzzz\tREADME.md\n' > "${tmp}/payload.HEAD"
+run check env
+expect_status 1 'a file whose contents changed fails'
+expect_out 'README.md' 'names the file that differs'
+
+printf 'aaa\tmetadata.rb\nbbb\tREADME.md\n' > "${tmp}/payload.HEAD"
+run check env
+expect_pass 'back to identical, passes again'
+
+section "check-version, the fail-open guards"
+
+run check env STUB_MODE=fail
+expect_status 1 'a list-payload that exits non-zero fails the check'
+
+run check env STUB_MODE=empty
+expect_status 1 'an empty manifest fails rather than comparing two nothings'
+expect_out 'Could not determine what would be published' 'explains why'
+
+run check env STUB_MODE=noise
+expect_pass 'a blank line from the toolchain on one side is not a difference'
+
+section "check-version, version bumped"
+
+bump() {
+  printf "name 'limits'\nversion '%s'\n" "$1" > metadata.rb
+}
+changelog() {
+  printf 'Changelog\n=========\n\n[%s]\n--------\n\n- A thing\n\n%s\n' "$1" "$2" > CHANGELOG.md
+}
+
+bump 3.2.0
+changelog v3.2.0 '[v3.2.0]: https://example.invalid/3.2.0'
+run check env
+expect_pass 'a bump that is untagged and documented passes'
+expect_out 'v3.2.0 is unreleased' 'says so'
+
+run check env STUB_TAG_EXISTS=yes
+expect_status 1 'a bump to an already tagged version fails'
+expect_out 'already tagged' 'explains why'
+
+# A request that fails is not an answer, and must not read as "no such tag".
+run check env STUB_TAG_EXISTS=broken
+expect_status 1 'a bump fails when GitHub cannot be asked whether the tag exists'
+expect_out 'Could not ask GitHub' 'explains why'
+
+changelog v3.1.0 '[v3.1.0]: https://example.invalid/3.1.0'
+run check env
+expect_status 1 'a bump whose changelog was not updated fails'
+expect_out "Newest entry is 'v3.1.0'" 'names what it found'
+
+changelog v3.2.0 '[v9.9.9]: https://example.invalid/9.9.9'
+run check env
+expect_status 1 'a bump missing its changelog link reference fails'
+expect_out 'Missing the link reference' 'explains why'
+
+changelog v3.2.0 '[v3.2.0]: https://example.invalid/3.2.0'
+run check env
+expect_pass 'a documented bump passes again'
+
+# A bumped version skips the payload comparison entirely, which is the point of
+# it: a bump is licence to change what ships.
+printf 'aaa\tmetadata.rb\nccc\tNEW.md\n' > "${tmp}/payload.HEAD"
+run check env
+expect_pass 'a bump may change the payload freely'
+
+section "check-version, unparseable metadata"
+
+printf "name 'limits'\n" > metadata.rb
+run check env
+expect_status 1 'metadata with no version fails'
+expect_out 'Could not parse the version' 'explains why'
+
+section "check-version, unparseable metadata on the base branch"
+
+# The base is read from FETCH_HEAD, and a failure to parse it has to be
+# reported rather than aborting the script on the assignment.
+git checkout --quiet -b feature
+printf "name 'limits'\nversion '3.1.0'\n" > metadata.rb
+git commit --quiet -am 'a parseable head'
+git checkout --quiet main
+printf "name 'limits'\n" > metadata.rb
+git commit --quiet -am 'an unparseable base'
+git checkout --quiet feature
+printf 'aaa\tmetadata.rb\n' > "${tmp}/payload.FETCH_HEAD"
+printf 'aaa\tmetadata.rb\n' > "${tmp}/payload.HEAD"
+run check env
+expect_status 1 'a base whose version cannot be parsed fails'
+expect_out 'Could not parse the version on main' 'explains why, naming the base'
+
+git checkout --quiet main
+printf "name 'limits'\nversion '3.1.0'\n" > metadata.rb
+cat > CHANGELOG.md <<'CL'
+Changelog
+=========
+
+[v3.1.0]
+--------
+
+- A thing
+
+[v3.1.0]: https://example.invalid/3.1.0
+CL
+git commit --quiet -am 'a parseable base again'
+git branch --quiet -D feature
+
+section "check-version mutations (each must turn a red case green)"
+
+bump 3.1.0
+changelog v3.1.0 '[v3.1.0]: https://example.invalid/3.1.0'
+printf 'aaa\tmetadata.rb\nbbb\tREADME.md\n' > "${tmp}/payload.FETCH_HEAD"
+printf 'aaa\tmetadata.rb\nccc\tREADME.md\n' > "${tmp}/payload.HEAD"
+
+# Confirm the case is red against the real script before mutating.
+run check env
+expect_status 1 'baseline for the mutations: a changed payload is red'
+
+mut="${tmp}/mut"
+mkdir -p "${mut}"
+cp "${sandbox}/lib.bash" "${sandbox}/list-payload" "${mut}/"
+
+# Bug 1: compare the manifests as process substitutions, and two failures
+# compare equal.
+python3 - "${sandbox}/check-version" "${mut}/check-version" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+
+
+def sub(text, old, new):
+    # A replacement that matches nothing leaves the original behind, and an
+    # unmutated script passing the test below reads exactly like a mutant that
+    # the check caught. Refuse to write a mutant that was never made.
+    if old not in text:
+        sys.exit(f'mutation source not found in {src}: {old!r}')
+    return text.replace(old, new)
+
+
+s = open(src).read()
+s = sub(s, '''  base_published="$(manifest FETCH_HEAD)"
+  head_published="$(manifest HEAD)"''', '''  base_published=x
+  head_published=x''')
+s = sub(s, '''  published_diff="$(diff <(printf '%s\\n' "${base_published}") \\
+    <(printf '%s\\n' "${head_published}") || true)"''',
+'''  published_diff="$(diff <(manifest FETCH_HEAD) <(manifest HEAD) || true)"''')
+open(dst, 'w').write(s)
+PY
+chmod +x "${mut}/check-version"
+run env PATH="${tmp}/bin:${PATH}" BASE_REF=main GITHUB_REPOSITORY=owner/repo \
+    GH_TOKEN=x STUB_DIR="${tmp}" STUB_MODE=fail "${mut}/check-version"
+expect_pass 'comparing process substitutions hides a broken list-payload'
+
+# Bug 4: without the tab filter, a stray blank line reads as a difference.
+python3 - "${sandbox}/check-version" "${mut}/check-version" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+
+s = open(src).read()
+old = """    [[ ${line} == *$'\\t'* ]] || continue\n"""
+# Same reason as above: a filter that was never removed would leave the script
+# correct, and the case below would credit it with catching something.
+if old not in s:
+    sys.exit(f'mutation source not found in {src}: {old!r}')
+open(dst, 'w').write(s.replace(old, ''))
+PY
+chmod +x "${mut}/check-version"
+printf 'aaa\tmetadata.rb\nbbb\tREADME.md\n' > "${tmp}/payload.HEAD"
+run env PATH="${tmp}/bin:${PATH}" BASE_REF=main GITHUB_REPOSITORY=owner/repo \
+    GH_TOKEN=x STUB_DIR="${tmp}" STUB_MODE=noise "${mut}/check-version"
+expect_status 1 'without the tab filter, toolchain noise fails an identical payload'
+
+summary

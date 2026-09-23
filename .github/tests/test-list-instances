@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# The matrix discovery step, with cinc stubbed.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+scripts="$(repo_root)/.github/scripts"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+sandbox="${tmp}/scripts"
+mkdir -p "${sandbox}" "${tmp}/bin"
+cp "${scripts}/list-instances" "${scripts}/lib.bash" "${sandbox}/"
+
+cat > "${tmp}/bin/cinc" <<'STUB'
+#!/usr/bin/env bash
+case ${STUB_MODE:-normal} in
+  fail)      echo 'stub: kitchen exploded' >&2; exit 1 ;;
+  empty)     echo '[]' ;;
+  malformed) echo 'not json at all' ;;
+  silent)    ;;
+  *)         echo '[{"instance":"cinc-18-ubuntu-2404"},{"instance":"cinc-19-debian-13"}]' ;;
+esac
+STUB
+chmod +x "${tmp}/bin/cinc"
+
+out="${tmp}/github_output"
+list() {
+  : > "${out}"
+  env PATH="${tmp}/bin:${PATH}" GITHUB_OUTPUT="${out}" "$@" "${sandbox}/list-instances"
+}
+
+section "list-instances"
+
+run list env
+expect_pass 'a normal listing succeeds'
+expect_out 'Found instances:' 'reports what it found'
+if grep -qx 'instances=\["cinc-18-ubuntu-2404","cinc-19-debian-13"\]' "${out}"; then
+  ok 'records a compact JSON array as the workflow output'
+else
+  bad "output file holds '$(cat "${out}")'"
+fi
+
+run list env STUB_MODE=fail
+expect_status 1 'a kitchen that fails fails the step'
+
+run list env STUB_MODE=silent
+expect_status 1 'a kitchen that prints nothing fails the step'
+
+run list env STUB_MODE=empty
+expect_status 1 'a kitchen with no instances fails rather than skipping the matrix'
+expect_out 'No Test Kitchen instances' 'explains why'
+
+run list env STUB_MODE=malformed
+# jq's own exit on input it cannot parse, propagated by set -e.
+expect_status "${JQ_PARSE_STATUS}" 'a listing jq cannot parse fails the step'
+
+run env -u GITHUB_OUTPUT PATH="${tmp}/bin:${PATH}" "${sandbox}/list-instances"
+expect_pass 'runnable by hand, outside a workflow'
+
+section "list-instances mutations (each must turn a red case green)"
+
+mut="${tmp}/mut"
+cp "${sandbox}/lib.bash" "${tmp}/"
+python3 - "${sandbox}/list-instances" "${mut}" <<'PY'
+import sys
+s = open(sys.argv[1]).read()
+old = """listing="$(cinc exec kitchen list --json)"
+instances="$(jq -c '[.[].instance]' <<<"${listing}")\""""
+new = """instances="$(cinc exec kitchen list --json | jq -c '[.[].instance]')\""""
+assert old in s
+# Drop the empty guard too, which is what the pipeline version lacked.
+# Also drop pipefail, which is how an inline workflow step runs: GitHub's
+# default shell is `bash -e`, with no pipefail.
+s = s.replace('set -euo pipefail', 'set -eu')
+s = s.replace(old, new).replace("""if [[ -z ${instances} || ${instances} == '[]' ]]; then
+  echo "::error file=kitchen.yml::No Test Kitchen instances to run."
+  exit 1
+fi
+
+""", '')
+open(sys.argv[2], 'w').write(s)
+PY
+chmod +x "${mut}"
+run env PATH="${tmp}/bin:${PATH}" GITHUB_OUTPUT="${out}" STUB_MODE=fail "${mut}"
+expect_pass 'piping kitchen into jq, without pipefail, masks the failure and wrongly passes'
+
+run env PATH="${tmp}/bin:${PATH}" GITHUB_OUTPUT="${out}" STUB_MODE=empty "${mut}"
+expect_pass 'and without the guard, an empty matrix wrongly passes'
+
+summary

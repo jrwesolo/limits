@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# install-cinc, with the download and the privilege escalation stubbed so the
+# script runs without installing anything.
+#
+# What is actually under test is the last line: the toolchain's first run in a
+# fresh home directory prints a bare newline to standard output, and the
+# install is where that gets paid, so no later script has to tolerate a line it
+# did not print.
+#
+# Needs a real cinc, since a stub of it could not reproduce the behaviour the
+# warm-up exists for. Skipped when there is none.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+action="$(repo_root)/.github/actions/setup-cinc"
+
+# Cinc, and one that runs. `command -v` is not enough: a cinc on PATH that
+# cannot execute produces a wall of failures that all mean "no toolchain" and
+# bury anything real, which is what a broken install looks like from here.
+if ! cinc exec ruby -e '' >/dev/null 2>&1; then
+  echo "  skipped: cinc is not available"
+  summary
+  exit 0
+fi
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+mkdir -p "${tmp}/bin"
+
+# The installer is fetched and piped into a root shell, so both halves are
+# replaced: curl prints nothing, and sudo runs the rest of its argv as this
+# user. An empty script is a valid one, so the pipeline succeeds having
+# installed nothing.
+printf '#!/usr/bin/env bash\nexit 0\n' > "${tmp}/bin/curl"
+printf '#!/usr/bin/env bash\nexec "$@"\n' > "${tmp}/bin/sudo"
+chmod +x "${tmp}/bin/curl" "${tmp}/bin/sudo"
+
+# A home of its own per case, since the behaviour under test happens once and
+# then never again for that home.
+fresh_home() { mkdir -p "${tmp}/home-$1"; printf '%s' "${tmp}/home-$1"; }
+
+# The first byte the toolchain writes to standard output in a given home.
+first_byte() {
+  HOME="$1" cinc exec ruby -e '' 2>/dev/null | head -c 1 | od -An -c | tr -d ' '
+}
+
+install_into() {
+  env PATH="${tmp}/bin:${PATH}" HOME="$1" \
+    VERSION=0.0.0 CACHE_DIR="${tmp}/cache-$2" "$3"
+}
+
+section "install-cinc"
+
+run install_into "$(fresh_home green)" green "${action}/install-cinc"
+expect_pass 'the script runs with the download and sudo stubbed'
+
+if [[ -d ${tmp}/cache-green ]]; then
+  ok 'it creates the cache directory the action caches'
+else
+  bad 'the cache directory was not created'
+fi
+
+section "the first-run newline"
+
+# The premise, stated as a case rather than assumed: a home that has never
+# seen the toolchain gets a bare newline ahead of whatever was asked for.
+cold="$(fresh_home cold)"
+if [[ $(first_byte "${cold}") == '\n' ]]; then
+  ok 'a home that has not seen the toolchain gets a newline on standard output'
+else
+  bad 'the premise no longer holds: the first run printed no newline'
+fi
+
+# And having seen it once, it does not.
+if [[ $(first_byte "${cold}") == '\n' ]]; then
+  bad 'the newline is printed every time, not only on the first run'
+else
+  ok 'and only on the first run'
+fi
+
+# The case itself: after install-cinc, the home is already warm.
+warm="$(fresh_home warm)"
+run install_into "${warm}" warm "${action}/install-cinc"
+expect_pass 'install-cinc succeeds'
+if [[ $(first_byte "${warm}") == '\n' ]]; then
+  bad 'a script running after the install still sees the newline'
+else
+  ok 'a script running after the install sees the manifest, not a blank line'
+fi
+
+section "install-cinc mutation (must turn the case above red)"
+
+mut="${tmp}/install-cinc"
+cp "${action}/install-cinc" "${mut}"
+delete_lines "${mut}" "^cinc exec ruby -e '' >/dev/null$"
+chmod +x "${mut}"
+
+stripped="$(fresh_home stripped)"
+run install_into "${stripped}" stripped "${mut}"
+expect_pass 'the install without the warm-up still succeeds'
+if [[ $(first_byte "${stripped}") == '\n' ]]; then
+  ok 'and a script running after it does see the newline, which is the bug'
+else
+  bad 'removing the warm-up changed nothing, so the case above proves nothing'
+fi
+
+summary

@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# The Renovate configuration check, with docker stubbed.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+scripts="$(repo_root)/.github/scripts"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+mkdir -p "${tmp}/bin" "${tmp}/empty"
+
+# Stands in for both runs: the validator, and the extraction that writes a
+# report into whatever directory is mounted at /out.
+cat > "${tmp}/bin/docker" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$@" >> "${STUB_DIR}/docker-args"
+[[ ${STUB_DOCKER:-ok} == ok ]] || { echo 'stub: docker failed' >&2; exit 1; }
+
+out=''
+prev=''
+for arg in "$@"; do
+  [[ ${prev} == --volume && ${arg} == *:/out ]] && out="${arg%%:*}"
+  prev=${arg}
+done
+[[ -n ${out} ]] || exit 0
+case ${STUB_REPORT:-full} in
+  none)  ;;
+  empty) printf '{"repositories":[{"packageFiles":{}}]}\n' > "${out}/report.json" ;;
+  *)     cat "${STUB_DIR}/report.json" > "${out}/report.json" ;;
+esac
+STUB
+chmod +x "${tmp}/bin/docker"
+
+work="${tmp}/repo"
+mkdir -p "${work}/.github/scripts"
+cd "${work}"
+git init --quiet -b main .
+git config user.email t@example.invalid
+git config user.name Test
+
+printf '# renovate: docker some/image\nversion=1.2.3\ndigest=sha256:%064d\n' 0 > .github/scripts/pinned
+printf '<!-- renovate: a-toolchain -->\nVersion 4.5.6 is what CI installs.\n' > TESTING.md
+printf 'plain\n' > README.md
+git add -A
+git commit --quiet -m fixtures
+
+report() {
+  cat > "${tmp}/report.json" <<JSON
+{"repositories":[{"packageFiles":{"custom.regex":[$1]}}]}
+JSON
+}
+both='{"packageFile":".github/scripts/pinned","deps":[{"depName":"some/image"}]},{"packageFile":"TESTING.md","deps":[{"depName":"a-toolchain"}]}'
+report "${both}"
+
+check() { : > "${tmp}/docker-args"; env PATH="${tmp}/bin:${PATH}" STUB_DIR="${tmp}" "$@" "${scripts}/check-renovate"; }
+
+section "check-renovate"
+
+run check env
+expect_pass 'a valid configuration with every marker extracted passes'
+expect_out 'dependency found' 'reports the marker rule'
+expect_out 'digest pin tracked' 'and the digest rule'
+if grep -q 'renovate-config-validator' "${tmp}/docker-args"; then
+  ok 'the configuration is validated'
+else
+  bad 'no validator run'
+fi
+if grep -q 'ghcr.io/renovatebot/renovate:[0-9.]*@sha256:' "${tmp}/docker-args"; then
+  ok 'in a container pinned by tag and digest'
+else
+  bad "docker was called with $(tr '\n' ' ' < "${tmp}/docker-args")"
+fi
+if grep -q 'RENOVATE_DRY_RUN=extract' "${tmp}/docker-args"; then
+  ok 'and extraction looks nothing up over a network'
+else
+  bad 'not an extract-only run'
+fi
+
+run check env STUB_DOCKER=bad
+expect_status 1 'a failing container fails the check'
+
+run check env STUB_REPORT=none
+expect_status 1 'a run that produces no report fails'
+expect_out 'produced no report' 'explains why'
+
+run check env STUB_REPORT=empty
+expect_status 1 'a report with no dependencies at all fails'
+expect_out 'extracted no dependencies' 'explains why'
+
+report '{"packageFile":"TESTING.md","deps":[{"depName":"a-toolchain"}]}'
+run check env
+expect_status 1 'a marked file that yields nothing fails'
+expect_out 'Carries a Renovate marker but yields no dependency' 'names the rule'
+expect_out '.github/scripts/pinned' 'and the file'
+
+# The marker gone but the digest still there, which marker-driven discovery
+# alone cannot see.
+mutate_file .github/scripts/pinned '# renovate: docker some/image' '# nothing here'
+git commit --quiet -am 'drop the marker'
+rm -f .github/scripts/pinned.bak
+run check env
+expect_status 1 'a deleted marker is caught by the digest rule'
+expect_out 'Pins something by digest that Renovate does not track' 'names the rule'
+
+git revert --quiet --no-edit HEAD
+report "${both}"
+run check env
+expect_pass 'restoring the marker passes again'
+
+# A tree with markers and pins removed: the searches find nothing, which must
+# read as the search having broken rather than as nothing to check.
+bare="${tmp}/bare"
+mkdir -p "${bare}"
+git -C "${bare}" init --quiet -b main .
+printf 'plain\n' > "${bare}/README.md"
+git -C "${bare}" add -A
+git -C "${bare}" -c user.email=t@example.invalid -c user.name=Test commit --quiet -m bare
+cd "${bare}"
+run check env
+expect_status 1 'a tree carrying no marker at all fails'
+expect_out 'No file carries a Renovate marker' 'explains why'
+cd "${work}"
+
+# The other half of that pair: markers present, but nothing pinned by digest.
+# The marker search alone would be satisfied here, so only the digest rule can
+# tell a repository that stopped pinning from one the search stopped seeing.
+unpinned="${tmp}/unpinned"
+mkdir -p "${unpinned}/.github/scripts"
+git -C "${unpinned}" init --quiet -b main .
+printf '# renovate: docker some/image\nversion=1.2.3\n' > "${unpinned}/.github/scripts/pinned"
+git -C "${unpinned}" add -A
+git -C "${unpinned}" -c user.email=t@example.invalid -c user.name=Test commit --quiet -m unpinned
+cd "${unpinned}"
+run check env
+expect_status 1 'a tree carrying a marker but no digest pin fails'
+expect_out 'Nothing is pinned by digest' 'explains why'
+cd "${work}"
+
+# A digest quoted in prose is not a dependency and must not be demanded.
+printf 'A digest looks like sha256:%064d when written out.\n' 1 >> README.md
+git commit --quiet -am 'quote a digest in prose'
+run check env
+expect_pass 'a digest quoted in documentation is ignored'
+git revert --quiet --no-edit HEAD
+
+run env PATH="${tmp}/empty:/usr/bin:/bin" STUB_DIR="${tmp}" "${scripts}/check-renovate"
+expect_status 1 'a missing docker fails rather than passing on nothing'
+expect_out 'docker is required' 'explains why'
+
+summary

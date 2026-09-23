@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# list-payload against a throwaway cookbook, with the real Chef chefignore.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.github/tests/harness.bash
+source "${here}/harness.bash"
+list_payload="$(repo_root)/.github/scripts/list-payload"
+
+# Cinc, and one that runs. `command -v` is not enough: a cinc on PATH that
+# cannot execute produces a wall of failures that all mean "no toolchain" and
+# bury anything real, which is what a broken install looks like from here.
+if ! cinc exec ruby -e '' >/dev/null 2>&1; then
+  echo "  skipped: cinc is not available"
+  summary
+  exit 0
+fi
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+work="${tmp}/cookbook"
+mkdir -p "${work}/libraries" "${work}/spec" "${work}/.github/workflows"
+cd "${work}"
+git init --quiet -b main .
+git config user.email t@example.invalid
+git config user.name Test
+
+cat > chefignore <<'IGN'
+spec/*
+.github/*
+CHANGELOG*
+chefignore
+IGN
+printf "name 'limits'\nversion '3.1.0'\n" > metadata.rb
+echo 'module Limits; end' > libraries/helpers.rb
+echo 'describe Limits do; end' > spec/helpers_spec.rb
+echo 'on: [push]' > .github/workflows/ci.yml
+echo '# Changelog' > CHANGELOG.md
+echo 'readme' > README.md
+git add -A
+git commit --quiet -m base
+base="$(git rev-parse HEAD)"
+
+section "list-payload, what a commit publishes"
+
+run "${list_payload}" HEAD
+expect_pass 'a commit with a chefignore is describable'
+expect_out $'\tmetadata.rb' 'metadata is published'
+expect_out $'\tlibraries/helpers.rb' 'libraries are published'
+expect_out $'\tREADME.md' 'the readme is published'
+expect_no_out 'spec/helpers_spec.rb' 'spec is ignored'
+expect_no_out 'CHANGELOG.md' 'the changelog is ignored'
+expect_no_out 'chefignore' 'chefignore ignores itself'
+expect_no_out '.github/workflows/ci.yml' 'a nested path under .github/* is ignored'
+
+# Sorted by path, which is what the script orders on: it sorts the pairs
+# before rendering them and the path is the first element.
+paths="$(printf '%s\n' "${LAST_OUT}" | cut -f2-)"
+if [[ ${paths} == "$(printf '%s\n' "${paths}" | LC_ALL=C sort)" ]]; then
+  ok 'output is sorted by path'
+else
+  bad 'output is not sorted by path'
+fi
+if [[ $(printf '%s\n' "${LAST_OUT}" | awk -F'\t' 'NF != 2' | wc -l) -eq 0 ]]; then
+  ok 'every line is exactly sha<TAB>path'
+else
+  bad 'a line is not sha<TAB>path'
+fi
+
+section "list-payload, the chefignore is the one at that commit"
+
+# The example Jordan asked for: stop ignoring the changelog and it ships.
+delete_lines chefignore CHANGELOG
+git commit --quiet -am 'publish the changelog'
+run "${list_payload}" HEAD
+expect_out 'CHANGELOG.md' 'dropping a chefignore line adds the file to the payload'
+
+run "${list_payload}" "${base}"
+expect_no_out 'CHANGELOG.md' 'the older commit still ignores it, read from its own chefignore'
+
+git revert --quiet --no-edit HEAD
+
+section "list-payload, content and identity"
+
+before="$(${list_payload} HEAD | grep $'\tREADME.md$')"
+echo 'changed' > README.md
+git commit --quiet -am 'edit the readme'
+after="$(${list_payload} HEAD | grep $'\tREADME.md$')"
+if [[ ${before} != "${after}" ]]; then
+  ok 'editing a published file changes its sha'
+else
+  bad 'sha did not change'
+fi
+if [[ ${before#*$'\t'} == "${after#*$'\t'}" ]]; then
+  ok 'the path is unchanged'
+else
+  bad 'path changed'
+fi
+
+echo 'changed' > spec/helpers_spec.rb
+git commit --quiet -am 'edit an ignored file'
+run "${list_payload}" HEAD
+if [[ ${LAST_OUT} == "$(${list_payload} HEAD~1)" ]]; then
+  ok 'editing an ignored file leaves the payload identical'
+else
+  bad 'an ignored file changed the payload'
+fi
+
+section "list-payload, awkward paths"
+
+printf 'a b\n' > 'a file with spaces.rb'
+printf 'utf\n' > 'naïve.rb'
+git add -A
+git commit --quiet -m 'paths that git would quote'
+run "${list_payload}" HEAD
+expect_out $'\ta file with spaces.rb' 'a path with spaces arrives verbatim'
+expect_out $'\tnaïve.rb' 'a non-ASCII path arrives verbatim'
+expect_no_out '"' 'no path is C-quoted'
+git rm --quiet 'a file with spaces.rb' 'naïve.rb'
+git commit --quiet -m 'drop them'
+
+section "list-payload, failure modes"
+
+run "${list_payload}"
+expect_status 1 'no argument fails'
+expect_out 'must be given a commit' 'explains why'
+
+run "${list_payload}" no-such-ref
+expect_status 1 'an unknown ref fails'
+expect_out 'cannot read chefignore' 'explains why'
+
+git rm --quiet chefignore
+git commit --quiet -m 'remove the chefignore'
+run "${list_payload}" HEAD
+expect_status 1 'a commit with no chefignore fails rather than publishing everything'
+git revert --quiet --no-edit HEAD
+
+section "list-payload, non-blob tree entries"
+
+# A gitlink: a submodule has no content in this tree and cannot be published.
+git update-index --add --cacheinfo 160000,"${base}",vendor/sub
+git commit --quiet -m 'add a gitlink'
+run "${list_payload}" HEAD
+expect_pass 'a tree carrying a gitlink is still describable'
+expect_no_out 'vendor/sub' 'the gitlink is not listed'
+expect_no_out $'\n\n' 'and it does not become a blank line'
+
+section "list-payload mutations (each must break a case above)"
+
+mut="${tmp}/mutant"
+
+mutate() { mutant_of "${list_payload}" "${mut}" "$1" "$2"; }
+
+git revert --quiet --no-edit HEAD
+printf 'a b\n' > 'a file with spaces.rb'
+printf 'utf\n' > 'naïve.rb'
+git add -A
+git commit --quiet -m 'paths git would quote'
+
+mutate "records = IO.popen(['git', 'ls-tree', '-r', '-z', ref], &:read)" \
+  "records = IO.popen(['git', 'ls-tree', '-r', ref], &:read)"
+mutate_file "${mut}" 'split("\0")' 'split("\n")'
+run "${mut}" HEAD
+expect_out '"na' 'without -z, git C-quotes a non-ASCII path (the case above is red)'
+
+git rm --quiet 'a file with spaces.rb' 'naïve.rb'
+git commit --quiet -m 'drop them again'
+
+mutate "type == 'blob' && " ''
+git update-index --add --cacheinfo 160000,"${base}",vendor/sub
+git commit --quiet -m 'gitlink again'
+run "${mut}" HEAD
+expect_out 'vendor/sub' 'without the blob filter, a gitlink is listed as published'
+git revert --quiet --no-edit HEAD
+
+mutate "ignore = IO.popen(['git', 'show', \"#{ref}:chefignore\"], &:read)" \
+  "ignore = IO.popen(['cat', 'chefignore'], &:read)"
+delete_lines chefignore CHANGELOG
+run "${mut}" "${base}"
+expect_out 'CHANGELOG.md' 'reading the working tree chefignore misdescribes an older commit'
+run "${list_payload}" "${base}"
+expect_no_out 'CHANGELOG.md' 'the real script is unaffected by the working tree'
+
+section "list-payload, the argument is never handed to a shell"
+
+marker="${tmp}/injected"
+rm -f "${marker}"
+run "${list_payload}" "HEAD; touch ${marker} #"
+expect_status 1 'a ref carrying a shell metacharacter fails'
+expect_out 'cannot read chefignore' 'and fails as an unknown ref, not as a command'
+if [[ -e ${marker} ]]; then
+  bad 'the injected command ran'
+else
+  ok 'nothing was executed'
+fi
+
+# shellcheck disable=SC2016  # the needle is shell source, not an expansion to make
+mutate "ignore = IO.popen(['git', 'show', \"#{ref}:chefignore\"], &:read)" \
+  'ignore = `git show #{ref}:chefignore`'
+run "${mut}" "HEAD; touch ${marker} #"
+if [[ -e ${marker} ]]; then
+  ok 'interpolating a ref into a shell command runs it (the case above is red)'
+else
+  bad 'the mutation did not reproduce the injection'
+fi
+rm -f "${marker}"
+
+summary
