@@ -80,6 +80,25 @@ about. Parsed separately, a release could tag a version that was never
 validated, or publish an artifact describing different code than the tag.
 Add a helper there rather than a second parser in a script.
 
+Containers
+----------
+
+A container is a dependency like any other, so it matters who builds it.
+Prefer, in order: an image Docker publishes as an Official Image, one
+published by the tool's own author or project, and only then somebody
+else's rebuild. Both images used here are the authors' own, since neither
+tool has an official image.
+
+What the runner already carries is not automatically the better answer. It
+drifts underneath you and differs from a workstation, which is how a lint
+that was clean locally failed a build here.
+
+Pin by tag and digest together. The tag says what the thing is to a reader,
+and the digest is what makes it the same bytes tomorrow, since a tag can be
+repushed and nothing in a diff would show it. Use the multi-platform index
+digest so it resolves on whatever architecture runs it, and mark it for
+Renovate so the two move together.
+
 Script or composite action
 --------------------------
 
