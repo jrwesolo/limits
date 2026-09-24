@@ -93,3 +93,11 @@ set_output() {
     printf '%s\n' "$1" >> "${GITHUB_OUTPUT}"
   fi
 }
+
+# Appends lines of Markdown to the job summary, one argument per line. Does
+# nothing outside GitHub Actions, for the same reason as set_output.
+add_summary() {
+  if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
+    printf '%s\n' "$@" >> "${GITHUB_STEP_SUMMARY}"
+  fi
+}

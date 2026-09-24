@@ -12,7 +12,7 @@ What is here
 
 | Script | What it does |
 | --- | --- |
-| `check-version` | Fails a pull request proposing a version that cannot be released, or changing what would be published without a new version |
+| `check-version` | Fails a pull request proposing a version that cannot be released, or changing what would be published without a new version. Lists the published files that change, in the log and the job summary |
 | `list-payload` | Prints what a commit would publish, one `sha<TAB>path` line per file |
 | `list-instances` | Prints the Test Kitchen instances as a JSON array, and records it as a workflow output |
 | `check-shell` | Runs shellcheck, in a pinned container, over every tracked shell script, found by shebang rather than by a list |

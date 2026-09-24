@@ -4,8 +4,14 @@
 # version that can actually be released: one that is not already tagged, and
 # one that is documented as the newest entry in the changelog.
 #
-# Both checks are skipped when the version is unchanged from the base branch,
-# so documentation-only pull requests are unaffected.
+# Both checks are skipped when the version is unchanged from the base branch.
+# The check that applies instead is that nothing published changes, so a
+# documentation-only pull request passes and a change users would download
+# does not.
+#
+# Either way it lists what the published cookbook gains, loses and changes
+# against the base branch, in the log and in the job summary, so a version
+# bump shows exactly which files the eventual artifact differs by.
 #
 # Expects BASE_REF, GITHUB_REPOSITORY and GH_TOKEN in the environment. Run it
 # from the root of a checkout.
@@ -51,10 +57,7 @@ fi
 
 echo "metadata.rb: ${version} (${BASE_REF}: ${base_version})"
 
-# What this commit would publish, against what the base branch publishes.
-# Anything a user downloads that is not identical has to arrive under a
-# version of its own, or it lands on the base branch attributed to a version
-# that was released without it.
+# What a commit would publish, one manifest entry per line.
 # Keeps only what looks like a manifest entry: a sha, a tab, a path.
 # Anything else reaching stdout is noise from the toolchain rather than
 # part of the answer, and a stray blank line compared as a difference that
@@ -73,34 +76,150 @@ manifest() {
   printf '%s' "${out}"
 }
 
-if [[ ${version} == "${base_version}" ]]; then
-  # Into variables rather than straight into diff, so that a manifest which
-  # fails to build aborts here. Compared as process substitutions, a broken
-  # list-payload yields two empty streams, diff calls them equal, and the
-  # check passes while guarding nothing.
-  base_published="$(manifest FETCH_HEAD)"
-  head_published="$(manifest HEAD)"
+# Prints how many lines a blob holds, as git counts them, or "binary" when git
+# would not diff it as text. Written to a file and compared against /dev/null,
+# because git will not diff a blob against the empty blob unless the empty blob
+# is stored, and a checkout need not store it. That also keeps the text or
+# binary decision git's own rather than a guess made here.
+#
+# Every failure returns non-zero explicitly. This runs inside a command
+# substitution, which set -e does not reach in bash 3.2.
+blob_lines() {
+  local tmp stat rc=0 added deleted
 
-  # Every cookbook publishes at least its metadata, so an empty manifest is a
-  # broken one rather than a cookbook with nothing in it.
-  if [[ -z ${base_published} || -z ${head_published} ]]; then
-    echo "::error file=chefignore::Could not determine what would be published."
-    exit 1
+  tmp="$(mktemp)" || return 1
+  if ! git cat-file -p "$1" > "${tmp}"; then
+    rm -f "${tmp}"
+    return 1
   fi
+  # Exits 1 when the two differ, which for a non-empty blob is always.
+  stat="$(git diff --no-index --numstat /dev/null "${tmp}")" || rc=$?
+  rm -f "${tmp}"
+  ((rc <= 1)) || return 1
 
-  published_diff="$(diff <(printf '%s\n' "${base_published}") \
-    <(printf '%s\n' "${head_published}") || true)"
+  # numstat prints lines added, lines deleted and the path, or a dash for
+  # each count when git reads the file as binary. Nothing at all for an
+  # empty blob, which has no lines to add.
+  read -r added deleted _ <<<"${stat}"
+  if [[ -z ${stat} ]]; then
+    printf "0"
+  elif [[ ${added} =~ ^[0-9]+$ && ${deleted} == 0 ]]; then
+    printf "%s" "${added}"
+  elif [[ ${added} == - && ${deleted} == - ]]; then
+    printf "binary"
+  else
+    return 1
+  fi
+}
 
-  if [[ -n ${published_diff} ]]; then
+# Prints one tab separated line per published file that differs between two
+# manifests: added, removed or modified, the path, and a size. An added file
+# is sized by the lines it brings and a removed one by the lines it takes
+# away, since lines changed in git would describe the file's history rather
+# than what the tarball gains or loses. A modified one is sized by lines added
+# and removed. A binary file says so instead.
+#
+# Both manifests arrive sorted by path from list-payload, which sorts bytewise,
+# so they are walked side by side, compared in the C locale to agree with that
+# order. Indexed arrays rather than an associative one, to stay within bash 3.2.
+payload_changes() {
+  local base_ref=$1 head_ref=$2 LC_ALL=C
+  local -a base_paths=() base_shas=() head_paths=() head_shas=()
+  local sha path i=0 j=0 lines stat added deleted
+
+  while IFS=$'\t' read -r sha path; do
+    base_shas+=("${sha}")
+    base_paths+=("${path}")
+  done <<<"$3"
+  while IFS=$'\t' read -r sha path; do
+    head_shas+=("${sha}")
+    head_paths+=("${path}")
+  done <<<"$4"
+
+  while ((i < ${#base_paths[@]} || j < ${#head_paths[@]})); do
+    if ((j >= ${#head_paths[@]})) ||
+      { ((i < ${#base_paths[@]})) && [[ ${base_paths[i]} < ${head_paths[j]} ]]; }; then
+      lines="$(blob_lines "${base_shas[i]}")" || return 1
+      [[ ${lines} == binary ]] || lines="-${lines}"
+      printf "removed\t%s\t%s\n" "${base_paths[i]}" "${lines}"
+      i=$((i + 1))
+    elif ((i >= ${#base_paths[@]})) || [[ ${head_paths[j]} < ${base_paths[i]} ]]; then
+      lines="$(blob_lines "${head_shas[j]}")" || return 1
+      [[ ${lines} == binary ]] || lines="+${lines}"
+      printf "added\t%s\t%s\n" "${head_paths[j]}" "${lines}"
+      j=$((j + 1))
+    else
+      if [[ ${base_shas[i]} != "${head_shas[j]}" ]]; then
+        stat="$(git diff --numstat "${base_ref}" "${head_ref}" -- ":(literal)${head_paths[j]}")" ||
+          return 1
+        read -r added deleted _ <<<"${stat}"
+        if [[ ${added} =~ ^[0-9]+$ && ${deleted} =~ ^[0-9]+$ ]]; then
+          printf "modified\t%s\t+%s -%s\n" "${head_paths[j]}" "${added}" "${deleted}"
+        elif [[ ${added} == - && ${deleted} == - ]]; then
+          printf "modified\t%s\tbinary\n" "${head_paths[j]}"
+        else
+          return 1
+        fi
+      fi
+      i=$((i + 1))
+      j=$((j + 1))
+    fi
+  done
+}
+
+# Into variables rather than straight into diff, so that a manifest which
+# fails to build aborts here. Compared as process substitutions, a broken
+# list-payload yields two empty streams, diff calls them equal, and the check
+# passes while guarding nothing.
+base_published="$(manifest FETCH_HEAD)"
+head_published="$(manifest HEAD)"
+
+# Every cookbook publishes at least its metadata, so an empty manifest is a
+# broken one rather than a cookbook with nothing in it.
+if [[ -z ${base_published} || -z ${head_published} ]]; then
+  echo "::error file=chefignore::Could not determine what would be published."
+  exit 1
+fi
+
+# Whether anything changed is decided by the manifests, never by the
+# description of them. If describing them fails, or yields nothing while the
+# manifests differ, the description is what is broken, and a change it failed
+# to describe must not pass for no change at all, so the raw difference is
+# printed instead. Tested in the condition, so set -e cannot end the script
+# on the assignment before the annotation is written.
+if ! changes="$(payload_changes FETCH_HEAD HEAD "${base_published}" "${head_published}")" ||
+  [[ ${base_published} != "${head_published}" && -z ${changes} ]]; then
+  echo "::error::The published cookbook changes, but the changes could not be described."
+  diff <(printf '%s\n' "${base_published}") <(printf '%s\n' "${head_published}") || true
+  exit 1
+fi
+
+base_count="$(grep -c . <<<"${base_published}")"
+head_count="$(grep -c . <<<"${head_published}")"
+
+echo "Published files: ${BASE_REF} has ${base_count}, this has ${head_count}."
+add_summary '### Published cookbook' '' \
+  "\`${BASE_REF}\` publishes ${base_count} files, this pull request publishes ${head_count}." ''
+
+if [[ -z ${changes} ]]; then
+  echo "  No published file changes."
+  add_summary 'No published file changes.' ''
+else
+  add_summary '| Change | File | Lines |' '| --- | --- | --- |'
+  while IFS=$'\t' read -r kind path size; do
+    printf '  %-9s %-28s %s\n' "${kind}" "${path}" "${size}"
+    add_summary "| ${kind} | \`${path//|/\\|}\` | ${size} |"
+  done <<<"${changes}"
+  add_summary ''
+fi
+
+if [[ ${version} == "${base_version}" ]]; then
+  # Anything a user downloads that is not identical has to arrive under a
+  # version of its own, or it lands on the base branch attributed to a version
+  # that was released without it.
+  if [[ -n ${changes} ]]; then
     echo "::error file=metadata.rb::The published cookbook changes but the \
 version does not. Bump it, or keep the change out of the tarball."
-    # The diff itself, rather than paths picked out of it with a pattern.
-    # A pattern that fails to match prints nothing, which turns a failure
-    # into one with no explanation attached.
-    echo "What differs between what the base publishes and what this does:"
-    while IFS= read -r line; do
-      printf '  %s\n' "${line}"
-    done <<<"${published_diff}"
     exit 1
   fi
 
