@@ -46,8 +46,6 @@ jobs:
       - name: Actionlint
         run: .github/scripts/check-workflows
       - name: Renovate config
-        env:
-          RENOVATE_GITHUB_COM_TOKEN: ${{ github.token }}
         run: .github/scripts/check-renovate
 
   unit:

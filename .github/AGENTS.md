@@ -17,7 +17,7 @@ What is here
 | `list-instances` | Prints the Test Kitchen instances as a JSON array, and records it as a workflow output |
 | `check-shell` | Runs shellcheck, in a pinned container, over every tracked shell script, found by shebang rather than by a list |
 | `check-workflows` | Runs actionlint over the workflows, in a pinned container |
-| `check-renovate` | Validates the Renovate configuration, fails on configuration Renovate would refuse when it looks dependencies up, and checks that every file carrying a marker still yields a dependency |
+| `check-renovate` | Validates the Renovate configuration, and checks that every file carrying a marker still yields a dependency |
 | `check-needs` | Fails unless every job in a `needs` context succeeded |
 | `release` | Tags a merge to `main` and writes its release notes. Says what it released, or that nothing was, in the job summary |
 | `publish` | Shares a tagged cookbook to Supermarket. Links the published version in the job summary |

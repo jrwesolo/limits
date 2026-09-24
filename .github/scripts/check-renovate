@@ -9,21 +9,8 @@
 # red. Extracting with Renovate itself and asserting that each marked file
 # still produces a dependency is what makes that a failure instead.
 #
-# It also fails on configuration Renovate would refuse, which the validator
-# does not catch. renovate-config-validator checks the configuration's shape,
-# but a version constraint is only parsed against its versioning scheme when a
-# dependency is looked up, so a packageRule such as allowedVersions "<26.04" on
-# a docker-versioned dependency validates cleanly here and then stops every
-# update in the repository. Renovate reports that as a problem and still exits
-# zero, so the report is read for it.
-#
-# That means a lookup rather than extraction alone, so this touches the
-# network. What a registry answers decides nothing here: proposed updates are
-# ignored, and a lookup that fails only leaves that dependency's rules
-# unchecked for the run rather than turning the check red. GitHub-hosted
-# dependencies need RENOVATE_GITHUB_COM_TOKEN to be looked up at all. CI
-# passes the workflow token and fails without one; by hand it is optional,
-# and without it those lookups are skipped with a warning.
+# Extraction only, so nothing is looked up over a network and the answer does
+# not depend on what a registry says today.
 #
 # Run it from the root of a checkout.
 
@@ -38,14 +25,6 @@ if ! command -v docker >/dev/null; then
   exit 1
 fi
 
-if [[ -z ${RENOVATE_GITHUB_COM_TOKEN:-} ]]; then
-  if [[ ${GITHUB_ACTIONS:-} == true ]]; then
-    echo "::error::RENOVATE_GITHUB_COM_TOKEN is not set, so GitHub-hosted dependencies would not be looked up."
-    exit 1
-  fi
-  echo "::warning::RENOVATE_GITHUB_COM_TOKEN is not set, so rules for GitHub-hosted dependencies go unchecked."
-fi
-
 image="ghcr.io/renovatebot/renovate:${version}@${digest}"
 
 out="$(mktemp -d)"
@@ -58,40 +37,19 @@ echo "Validating the configuration"
 docker run --rm --volume "${PWD}:/repo:ro" --workdir /repo \
   --entrypoint renovate-config-validator "${image}"
 
-# Named rather than given a value, so docker passes the token through from
-# this environment and it never appears on a command line.
-echo "Looking up dependencies"
+echo "Extracting dependencies"
 docker run --rm \
   --volume "${PWD}:/repo:ro" \
   --volume "${out}:/out" \
   --workdir /repo \
   --env RENOVATE_PLATFORM=local \
-  --env RENOVATE_DRY_RUN=lookup \
-  --env RENOVATE_GITHUB_COM_TOKEN \
+  --env RENOVATE_DRY_RUN=extract \
   --env RENOVATE_REPORT_TYPE=file \
   --env RENOVATE_REPORT_PATH=/out/report.json \
   "${image}" >/dev/null
 
 if [[ ! -s ${out}/report.json ]]; then
   echo "::error::Renovate produced no report."
-  exit 1
-fi
-
-# Before anything is read out of the report, because a configuration Renovate
-# refuses comes back with no package files at all, and the check below would
-# then blame extraction for what is really the configuration. Keyed on the
-# error Renovate attaches, not on the wording of its log line.
-# Each is printed with Renovate's own explanation, which names the setting and
-# the value it could not parse.
-refused="$(jq -r '[.problems[]?, .repositories[].problems[]?]
-  | map(select(.err.validationSource == "config"))
-  | unique_by(.err.validationMessage)[]
-  | "\(.err.validationError): \(.err.validationMessage)"' "${out}/report.json")"
-
-if [[ -n ${refused} ]]; then
-  while IFS= read -r line; do
-    printf '::error file=.github/renovate.jsonc::Renovate would refuse this configuration. %s\n' "${line}"
-  done <<<"${refused}"
   exit 1
 fi
 
@@ -169,4 +127,4 @@ if ((missing)); then
   exit 1
 fi
 
-echo "Configuration is valid and accepted on lookup, and every marked file still yields a dependency."
+echo "Configuration is valid, and every marked file still yields a dependency."
