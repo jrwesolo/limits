@@ -78,7 +78,10 @@ if ! tag_version="$(cookbook_version <(printf '%s\n' "${metadata}"))" ||
   exit 1
 fi
 
-echo "Publishing ${name} ${version} from ${tag} at $(git rev-parse --short "refs/tags/${tag}^{commit}")"
+commit="$(git rev-parse --short "refs/tags/${tag}^{commit}")"
+page="${site}/cookbooks/${name}/versions/${version}"
+
+echo "Publishing ${name} ${version} from ${tag} at ${commit}"
 
 # A 404 is the expected answer for a version that has not been shared yet, so
 # check the status explicitly rather than letting curl -f treat it as an error.
@@ -89,6 +92,8 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' \
 case ${status} in
   200)
     echo "${name} ${version} is already on Supermarket, nothing to publish."
+    add_summary "### Supermarket" "" \
+      "[\`${name}\` ${version}](${page}) is already on Supermarket, so nothing was published." ""
     exit 0
     ;;
   404)
@@ -120,3 +125,6 @@ cinc exec knife supermarket share "${name}" \
   --supermarket-site "${site}" \
   --user "${SUPERMARKET_USER}" \
   --key "${key_file}"
+
+add_summary "### Supermarket" "" \
+  "Shared [\`${name}\` ${version}](${page}) from \`${tag}\` at \`${commit}\`." ""

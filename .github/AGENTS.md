@@ -12,15 +12,15 @@ What is here
 
 | Script | What it does |
 | --- | --- |
-| `check-version` | Fails a pull request proposing a version that cannot be released, or changing what would be published without a new version |
+| `check-version` | Fails a pull request proposing a version that cannot be released, or changing what would be published without a new version. Lists the published files that change, in the log and the job summary |
 | `list-payload` | Prints what a commit would publish, one `sha<TAB>path` line per file |
 | `list-instances` | Prints the Test Kitchen instances as a JSON array, and records it as a workflow output |
 | `check-shell` | Runs shellcheck, in a pinned container, over every tracked shell script, found by shebang rather than by a list |
 | `check-workflows` | Runs actionlint over the workflows, in a pinned container |
 | `check-renovate` | Validates the Renovate configuration, and checks that every file carrying a marker still yields a dependency |
 | `check-needs` | Fails unless every job in a `needs` context succeeded |
-| `release` | Tags a merge to `main` and writes its release notes |
-| `publish` | Shares a tagged cookbook to Supermarket |
+| `release` | Tags a merge to `main` and writes its release notes. Says what it released, or that nothing was, in the job summary |
+| `publish` | Shares a tagged cookbook to Supermarket. Links the published version in the job summary |
 | `lib.bash` | Shared helpers. Sourced, never executed |
 | `detect-platform` | Prints the platform whose Cinc package the cache is keyed on |
 | `install-cinc` | Installs the pinned Cinc Workstation, reusing a cached package |
@@ -152,6 +152,13 @@ bump. That pair is enforced instead of tracked. A suite running a client
 outside the `chef_version` constraint in `metadata.rb` fails at converge,
 because Chef validates the running version against the cookbook's metadata
 and raises before any recipe runs.
+
+The runner image is pinned by version, `ubuntu-24.04` rather than
+`ubuntu-latest`, for the same reason the platform images are a problem.
+Renovate reads every `runs-on` label, but it skips `latest` as not being a
+version, silently, so a floating label moves when GitHub moves it and never
+through a pull request that CI has run against. A version label becomes a
+Renovate update instead, and the new runner is tested before it is used.
 
 Script or composite action
 --------------------------

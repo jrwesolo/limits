@@ -18,7 +18,7 @@ runs:
     # The platform, not just the operating system. Every Ubuntu release gets
     # its own build of the package under the same filename, so a key of
     # Linux-X64 alone would hand a 24.04 package to a 26.04 runner the day
-    # ubuntu-latest moves. The installer would find the name, skip the
+    # the runners move. The installer would find the name, skip the
     # download, fail the checksum against the metadata for the new release,
     # and exit rather than fetching the right one, leaving every job red until
     # somebody edited this key.
