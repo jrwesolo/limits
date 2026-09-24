@@ -153,6 +153,13 @@ outside the `chef_version` constraint in `metadata.rb` fails at converge,
 because Chef validates the running version against the cookbook's metadata
 and raises before any recipe runs.
 
+The runner image is pinned by version, `ubuntu-24.04` rather than
+`ubuntu-latest`, for the same reason the platform images are a problem.
+Renovate reads every `runs-on` label, but it skips `latest` as not being a
+version, silently, so a floating label moves when GitHub moves it and never
+through a pull request that CI has run against. A version label becomes a
+Renovate update instead, and the new runner is tested before it is used.
+
 Script or composite action
 --------------------------
 
