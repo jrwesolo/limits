@@ -19,8 +19,8 @@ What is here
 | `check-workflows` | Runs actionlint over the workflows, in a pinned container |
 | `check-renovate` | Validates the Renovate configuration, and checks that every file carrying a marker still yields a dependency |
 | `check-needs` | Fails unless every job in a `needs` context succeeded |
-| `release` | Tags a merge to `main` and writes its release notes |
-| `publish` | Shares a tagged cookbook to Supermarket |
+| `release` | Tags a merge to `main` and writes its release notes. Says what it released, or that nothing was, in the job summary |
+| `publish` | Shares a tagged cookbook to Supermarket. Links the published version in the job summary |
 | `lib.bash` | Shared helpers. Sourced, never executed |
 | `detect-platform` | Prints the platform whose Cinc package the cache is keyed on |
 | `install-cinc` | Installs the pinned Cinc Workstation, reusing a cached package |
