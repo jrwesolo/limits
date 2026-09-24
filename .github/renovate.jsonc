@@ -28,6 +28,8 @@
   "labels": ["dependencies"],
 
   "packageRules": [
+    // TEMPORARY: an invalid range, to show check-renovate failing. Revert.
+    { "matchDepTypes": ["github-runner"], "allowedVersions": "<26.04" },
     {
       // One pull request for everything. There are two actions and one
       // toolchain pin here, so separate pull requests would be noise and
