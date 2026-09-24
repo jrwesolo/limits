@@ -10,17 +10,28 @@ module Limits
       @entries = []
 
       if ::File.exist?(path)
-        ::File.read(path).scan(Limits::REGEX) do |match|
+        # Limits::REGEX is an LF grammar: it ends a line at '$', which sits
+        # in front of a '\n' and not in front of the '\r' of a CRLF pair.
+        # Left alone, a file written with Windows endings parses as only
+        # those of its limits that carry an inline comment, since '\#.*+'
+        # consumes the '\r' where nothing else does, and the rest are
+        # dropped the next time the file is written. Normalizing here rather
+        # than loosening the grammar keeps one definition of a line, and the
+        # file is rewritten with LF.
+        ::File.read(path).gsub("\r\n", "\n").scan(Limits::REGEX) do |match|
           groups = Hash[::Limits::REGEX.names.zip(match)]
 
           # remove end newline on comment for formatting
           groups['comment'].chomp! if groups['comment']
 
+          # The one place a '#' is read as syntax. Everywhere else a comment
+          # is already its own text: the comment property holds what a
+          # recipe asked for, and an entry keeps what it was handed.
           add(Limits::Entry.new(groups['domain'],
                                 groups['type'],
                                 groups['item'],
                                 groups['value'],
-                                groups['comment']))
+                                Limits::Helpers.unformat_comment(groups['comment'])))
         end
       end
     end
@@ -31,10 +42,6 @@ module Limits
 
     def at(idx)
       @entries.at(idx)
-    end
-
-    def write!
-      ::File.write(@path, self)
     end
 
     def add(new)
@@ -58,12 +65,26 @@ module Limits
     # Construct file with entries that are available. Entries with
     # comments will be surrounded by empty lines for readability.
     def to_s
-      str = "# #{@path}\n#\n# This file is managed by Chef\n# Local changes may be lost!\n"
+      # The path goes through format_comment rather than into a string with
+      # a '#' in front of it, because a filename may carry a newline: Linux
+      # allows any byte but '/' and NUL, and pam_limits reads the files it
+      # globs regardless. Written by hand, such a name would end the comment
+      # and stand the rest of itself up as a line of its own, which reads
+      # back as a limit nobody declared.
+      str = Limits::Helpers.format_comment(
+        "#{@path}\n\nThis file is managed by Chef\nLocal changes may be lost!"
+      )
+
+      # Once, rather than once per entry. columns walks every entry and
+      # transposes the result, and the entries do not change while the file
+      # is being rendered, so calling it inside the loop did that work n
+      # times over to arrive at the same widths.
+      widths = columns
 
       last_had_comment = true
       @entries.sort.each do |entry|
         str << "\n" if entry.comment || last_had_comment
-        str << entry.format(columns)
+        str << entry.format(widths)
         str << "\n"
         last_had_comment = !entry.comment.nil?
       end

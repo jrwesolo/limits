@@ -1,6 +1,128 @@
 limits cookbook CHANGELOG
 =========================
 
+[v3.1.0]
+--------
+
+Input that was silently mishandled is now refused. A limit whose domain
+or value carries whitespace or a `#` cannot be written to a limits file
+and read back, so it was either dropped on the next read or returned
+with a different value, and the resource never settled. Such a limit now
+fails property validation instead. One shape of it was still enforced:
+pam_limits reads a value only up to the end of its leading number, so a
+value such as `10 `, `10 20` or `10#20` reached pam as 10 while the
+resource reported a change on every run. A recipe carrying one now fails
+until the value is corrected. Nothing valid is refused: limits.conf has
+no line continuation, its first three fields are separated by
+whitespace, and a `#` ends the line wherever it falls, so a field
+carrying either character cannot describe a limit in the first place.
+
+A limits file written with CRLF line endings also no longer loses
+limits. Such a file parsed as only those of its limits that carried an
+inline comment, and the rest were dropped the next time the file was
+written.
+
+A comment no longer keeps a limit converging forever. Chef coerces both
+the comment a recipe asks for and the comment read back off disk on their
+way into the same property, so whatever that coercion does it has to do
+twice and give the same answer. It did not: trailing whitespace was kept
+where the file dropped it, and a leading `#` was taken off, then taken
+off again on the second pass.
+
+**The `comment` property now holds the comment's own text.** The `#` that
+opens every comment line in a limits file belongs to the file and is
+written for you, so a comment carrying one of its own keeps it.
+`comment '#4127 see the ticket'` is written as `# #4127 see the ticket`,
+where before it was quietly written as `# 4127 see the ticket`. A recipe
+that spelled the `#` out, as `comment '# note'`, writes `# # note` now
+and rewrites such a file once on the first run after upgrading.
+
+* Reject a `domain` or `value` that cannot survive being written to a
+  limits file and read back, in the `limit` resource as a property
+  validation failure and in `Limits::Entry` for anything reaching the
+  library another way. A limit with no value is untouched, since that
+  is how a lookup and the delete action name a limit without saying
+  what it should be
+* Keep a file path inside the header comment that opens a managed file.
+  A newline in a filename is legal on Linux and pam_limits reads such a
+  file like any other, but the header was built by hand, so the name
+  could end the comment and leave a line behind that read back as a
+  limit nobody declared
+* Normalize a `comment` to the form it is written in, stripping trailing
+  whitespace from each of its lines. The property kept its own, but every
+  line is written stripped, so the comment a limit was asked for and the
+  comment read back off disk never compared equal and the limit converged
+  on every run
+* Read a comment's `#` as syntax only when reading a file. Taking one off
+  is now `Limits::Helpers.unformat_comment`, used by `Limits::File` and
+  nowhere else, which leaves the coercion the `comment` property applies
+  as nothing but an rstrip, and applying an rstrip twice changes nothing.
+  Before, the property took a `#` off whatever a recipe gave it and
+  `Limits::Entry` took another off on the way to the file, so
+  `## warning` was written as `# warning`, and `#1 priority` was written
+  as `# 1 priority` and never noticed, because a wrong comment still
+  settles
+* Read a `#` line with nothing after it, directly above a limit, as no
+  comment at all. It was read as an empty comment, which the `comment`
+  property refuses, so any `limit` on the line below it failed the
+  converge, and it was written back as a blank line, so the file took a
+  second rewrite to settle
+* Read a comment line indented in front of its `#` as the comment after
+  the `#`. The indentation kept the `#` from being recognized, so a
+  hand-edited `  # note` was rewritten as `#   # note`. It is now
+  rewritten as `# note`, once, on the first run after upgrading
+* Coerce a value to an Integer only when the whole string is a number.
+  The match was anchored to line boundaries rather than to the ends of
+  the string, so a value carrying a newline could be read as a number on
+  one of its lines and coerced as a whole, turning `foo\n10` into 0
+* Keep the limits in a file written with CRLF line endings. A line ends
+  at a `\n`, so a `\r` in front of one stopped the line matching, except
+  where an inline comment consumed it. A CRLF file therefore parsed as
+  some of its limits and not others, and the rest were dropped the next
+  time the file was written. The endings are normalized on read and the
+  file is rewritten with `\n`
+* Rewrite the file through Chef when purging, rather than writing it
+  directly once per removed limit. Each deletion rendered and replaced
+  the whole file, so an interrupted run left some unmanaged limits gone
+  and the rest still there, `backup` was ignored by the one action that
+  deletes configuration somebody else wrote, and the run showed no
+  content diff. **A file managed by `:purge` alone now takes the
+  resource's owner, group and mode, where before it kept whatever it
+  already had.** Those are applied on every run rather than only on one
+  that finds something to remove, since the run that corrects them is
+  otherwise the same run that leaves nothing to purge, and a file changed
+  by hand afterwards would stay that way. The content is still rewritten
+  only when there is something to remove, and a path with no file on it
+  is still left alone rather than given an empty one. Purge now replaces
+  the file in one step as well
+* Replace the file in one step when a limit changes, rather than
+  truncating it and writing it again. The file was rewritten with
+  `File.write`, which truncates the destination and only then renders
+  what it was handed, so a failure while rendering left an empty file
+  where the limits had been, and a client killed partway through left a
+  prefix of one that pam reads without complaint. It is now written
+  through Chef's `file` resource, run rather than declared against an
+  event dispatcher nobody is subscribed to, so a file written once per
+  limit does not report itself once per limit. One consequence of
+  replacing the file rather than writing over it: POSIX ACLs set with
+  `setfacl` are not carried across, which is true of every other file
+  Chef manages
+* Accept the `nonewprivs` and `rttime` items, the two the limits.conf
+  man page documents that this cookbook did not. Neither is available on
+  every platform and the resource does not check: pam_limits logs an
+  unknown item and skips the line, so writing one is honored by a newer
+  module rather than failing the run
+* Document the valid types and items in the README with a description
+  for each, along with a Requirements section. They were reachable only
+  by opening `libraries/constants.rb`, which a reader on Supermarket
+  cannot do
+* Test against Rocky Linux 10 as well as Rocky Linux 9, which covers the
+  EL10 client packages rather than only the EL9 ones
+* Ship `CHANGELOG.md` in the published cookbook, so that Supermarket
+  renders it as the Changelog tab on the cookbook page. Along with the
+  README it is one of only two files Supermarket reads out of the
+  tarball
+
 [v3.0.0]
 --------
 
@@ -135,6 +257,7 @@ limits be able to be specified using attributes. Please see the
 
 * Initial release of limits
 
+[v3.1.0]: https://github.com/jrwesolo/limits/tree/v3.1.0
 [v3.0.0]: https://github.com/jrwesolo/limits/tree/v3.0.0
 [v2.4.1]: https://github.com/jrwesolo/limits/tree/v2.4.1
 [v2.4.0]: https://github.com/jrwesolo/limits/tree/v2.4.0

@@ -17,9 +17,11 @@ curl -fsSL https://omnitruck.cinc.sh/install.sh | sudo bash -s -- \
   -P cinc-workstation
 ```
 
-[TESTING.md][2] records the exact versions this cookbook is tested
-against. Integration tests run in containers through kitchen-dokken,
-so Docker needs to be running for those.
+[TESTING.md][2] records the version this cookbook is tested against,
+how each test layer is built, what each integration fixture covers, how
+to run a single Test Kitchen instance, and what to do when a converge
+will not start. Integration tests run in containers through
+kitchen-dokken, so Docker needs to be running for those.
 
 Running the tests
 -----------------
@@ -37,20 +39,34 @@ Where things live
 | --- | --- |
 | `libraries/` | Plain Ruby classes that do the parsing and formatting |
 | `resources/` | The `limits_file` and `limit` custom resources |
-| `spec/` | RSpec tests for the library classes |
+| `spec/libraries/` | RSpec tests for the library classes |
+| `spec/resources/` | ChefSpec tests for what only a converge decides |
 | `test/fixtures/cookbooks/limits_test/` | Wrapper cookbook the suites converge |
-| `test/integration/` | InSpec controls that assert the result |
+| `test/integration/default/` | InSpec profile that asserts the result |
 | `.github/workflows/` | The pipeline: tests on every pull request, release and publish on merges to `main` |
 | `.github/scripts/` | What those jobs run, plus the shell library they share |
 | `.github/actions/setup-cinc/` | Composite action that installs and caches the pinned Cinc Workstation |
 | `AGENTS.md` | Conventions worth reading before changing any of the above |
 
-There are no ChefSpec tests, deliberately. The custom resources read
-and write the real filesystem at converge time, so stepping into them
-under ChefSpec would touch the host's own
-`/etc/security/limits.conf`. Resource behavior is covered by the
-integration suites instead, and the specs exercise the library classes
-directly.
+Specs mirror the library one file each, named after the class or
+constant they cover, with one exception. `spec/libraries/writable_spec.rb`
+holds the rules that belong to no single class: what may be written into
+a limits file, and what has to come back when it is read again. The test
+for where a new spec goes is whether it can be stated as a fact about one
+class without naming another. If it can, it goes in the mirror file. If
+the failure only shows up when two classes meet, usually by writing a
+file and parsing it again, it goes in `writable_spec.rb`.
+
+A test belongs in the cheapest of three layers that can catch the
+regression. `spec/libraries/` is plain Ruby with no Chef in it and runs
+in milliseconds; anything that is a fact about parsing, formatting or
+validation goes here, which is most of the cookbook. `spec/resources/`
+is ChefSpec, kept to what only a converge decides: what
+`converge_if_changed` reports as updated, property validation, which
+limits the purge action counts as declared, and that a limit writes
+through Chef's file resource. `test/integration/` is Test Kitchen and
+InSpec, for what is only true of a real filesystem: the bytes that land,
+ownership and mode, and idempotency across a second converge.
 
 Versioning
 ----------

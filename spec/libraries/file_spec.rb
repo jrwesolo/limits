@@ -1,4 +1,4 @@
-require 'spec_helper'
+require_relative '../spec_helper'
 
 describe Limits::File do
   let(:file_stub) do
@@ -16,9 +16,6 @@ describe Limits::File do
       invalid limit
       user5 - cpu 50
     EOF
-  end
-
-  let(:existing_file) do
   end
 
   context 'Using new file' do
@@ -54,7 +51,7 @@ describe Limits::File do
       end
     end
 
-    context 'With change (only 1 limit)' do
+    context 'With one limit added' do
       before do
         subject.add(Limits::Entry.new('apple', 'soft', 'nproc', '10'))
       end
@@ -124,12 +121,63 @@ describe Limits::File do
     end
   end
 
+  context 'Using an existing but empty file' do
+    # What a limits.d file looks like after someone empties it by hand, and
+    # what every file looks like the first time limits_file manages one
+    # that was created by something else.
+    subject { Limits::File.new('limits.conf') }
+
+    before do
+      allow(::File).to receive(:exist?).with('limits.conf').and_return(true)
+      allow(::File).to receive(:read).with('limits.conf').and_return('')
+    end
+
+    it '#count' do
+      expect(subject.count).to eq(0)
+    end
+
+    it '#columns' do
+      expect(subject.columns).to be_empty
+    end
+
+    it '#to_s' do
+      expect(subject.to_s).to eq(<<~'EOF')
+        # limits.conf
+        #
+        # This file is managed by Chef
+        # Local changes may be lost!
+
+        # End of file (0 limits)
+      EOF
+    end
+  end
+
   context 'Using existing file' do
     subject { Limits::File.new('limits.conf') }
 
     before do
       allow(::File).to receive(:exist?).with('limits.conf').and_return(true)
       allow(::File).to receive(:read).with('limits.conf').and_return(file_stub)
+    end
+
+    # Parsing is where a comment loses the '#' a file writes it with, since
+    # Limits::Entry takes a comment as given. Exactly one '#' comes off, so
+    # a comment that was written to keep one keeps it.
+    context 'With a comment carrying a hash of its own' do
+      let(:file_stub) do
+        <<~'EOF'
+          # # warning
+          user1 hard nofile 1024
+        EOF
+      end
+
+      it 'strips the hash a file writes and no more' do
+        expect(subject.at(0).comment).to eq('# warning')
+      end
+
+      it 'writes the same comment back out' do
+        expect(subject.to_s).to include("# # warning\n")
+      end
     end
 
     context 'With no changes' do
@@ -167,6 +215,20 @@ describe Limits::File do
 
           # End of file (5 limits)
         EOF
+      end
+    end
+
+    context 'With a delete that matches nothing' do
+      # The :delete action of the limit resource reaches this whenever it
+      # runs against a limit that is not in the file, which is the ordinary
+      # case once the limit has been removed one time.
+      it 'leaves the file alone' do
+        before_delete = subject.to_s
+
+        subject.delete(Limits::Entry.new('nobody', 'hard', 'nofile'))
+
+        expect(subject.count).to eq(5)
+        expect(subject.to_s).to eq(before_delete)
       end
     end
 
@@ -212,6 +274,70 @@ describe Limits::File do
           # End of file (5 limits)
         EOF
       end
+    end
+  end
+
+  context 'Using an existing file with CRLF line endings' do
+    # Exotic on Linux but reachable: a limits.d file edited over Samba, or
+    # rendered from a template that carries Windows endings.
+    #
+    # The consequence is out of all proportion to the cause. Limits::REGEX
+    # ends its line at '$', and with CRLF the position after the value sits
+    # in front of a '\r' rather than in front of the '\n', so the match
+    # fails. It fails selectively, which is worse than failing outright: a
+    # line carrying an inline comment still matches, because '\#.*+' eats
+    # the '\r' on its way to the end of the line. So a CRLF file parses as
+    # some of its limits rather than none, every other limit looks absent,
+    # and the next write drops them.
+    #
+    # Silently dropping limits from a file Chef was asked to manage is the
+    # worst thing this cookbook can do, so the endings are normalized on
+    # read and the file is rewritten with LF.
+    subject { Limits::File.new('limits.conf') }
+
+    let(:crlf_stub) do
+      <<~'EOF'.gsub("\n", "\r\n")
+        # a comment for user1
+        user1 hard nofile 1024
+        user2 soft nproc 20 # inline
+      EOF
+    end
+
+    before do
+      allow(::File).to receive(:exist?).with('limits.conf').and_return(true)
+      allow(::File).to receive(:read).with('limits.conf').and_return(crlf_stub)
+    end
+
+    it 'finds every limit in the file' do
+      expect(subject.count).to eq(2)
+    end
+
+    it 'keeps an existing limit findable' do
+      expect(subject.index(Limits::Entry.new('user1', 'hard', 'nofile'))).to_not be_nil
+    end
+
+    it 'does not carry a carriage return into a field' do
+      expect(subject.map(&:value)).to eq([1024, 20])
+    end
+
+    it '#to_s' do
+      expect(subject.to_s).to eq(<<~'EOF')
+        # limits.conf
+        #
+        # This file is managed by Chef
+        # Local changes may be lost!
+
+        # a comment for user1
+        user1    hard    nofile    1024
+
+        user2    soft    nproc     20
+
+        # End of file (2 limits)
+      EOF
+    end
+
+    it 'writes the file back with LF endings only' do
+      expect(subject.to_s).to_not include("\r")
     end
   end
 end

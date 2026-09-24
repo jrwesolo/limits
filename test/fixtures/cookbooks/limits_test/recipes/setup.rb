@@ -1,11 +1,25 @@
-# These resource are only intended to do some initial
-# configuration as a starting point for testing. The
-# resources will be skipped once the files are managed
-# by the limits cookbook custom resources.
+# These resources are only intended to do some initial
+# configuration as a starting point for testing. They are
+# seeded once per container and never run again, which leaves
+# the limits cookbook custom resources to own the files from
+# then on.
+#
+# 300_deleted.conf is seeded only so that the delete action in
+# the default recipe has something to delete. Without it the
+# integration test asserts that a file nobody ever created is
+# absent, which passes whether or not the action works.
+#
+# 500_purged.conf is seeded with limits no resource declares and
+# with the same wrong ownership and mode as the rest, because the
+# purge action manages it without a create action alongside. It
+# is the only file that proves what :purge does to a file's
+# permissions on its own.
 
 files_for_setup = %w(
   /etc/security/limits.conf
-  /etc/security/limits.d/100_kitchen.conf
+  /etc/security/limits.d/100_unpurged.conf
+  /etc/security/limits.d/300_deleted.conf
+  /etc/security/limits.d/500_purged.conf
 )
 
 files_for_setup.each do |path|
@@ -15,7 +29,28 @@ files_for_setup.each do |path|
     group node['setup']['group']
     mode '0755'
     backup false
-    action :create
-    not_if { ::File.exist?(path) && ::File.foreach(path).grep(/managed by Chef/).any? }
+    action :nothing
+  end
+end
+
+# The marker is what makes the seeding happen once rather than once per
+# converge. Test Kitchen converges twice and fails the run if the second
+# converge changes anything, so a seed that fired every time would either
+# fight the cookbook for the files it manages or restore the file the
+# default recipe deletes.
+#
+# Asking each file whether it had been managed yet would not do. That
+# question becomes true for the two files the cookbook rewrites, because it
+# leaves a header in them, and never becomes true for 300_deleted.conf,
+# which is deleted rather than managed.
+#
+# The notifications are immediate on purpose. A delayed notification runs
+# at the end of the run, after limits_file and limit have converged, which
+# would seed the files again on top of what the cookbook just wrote.
+file '/tmp/limits_test_seeded' do
+  action :create
+
+  files_for_setup.each do |path|
+    notifies :create, "cookbook_file[#{path}]", :immediately
   end
 end

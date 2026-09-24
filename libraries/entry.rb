@@ -10,11 +10,24 @@ module Limits
                 :comment
 
     def initialize(domain, type, item, value = nil, comment = nil)
-      @domain = domain
-      @type = type
-      @item = item
+      @domain = Limits::Helpers.validate_field!(:domain, domain)
+      @type = Limits::Helpers.validate_field!(:type, type)
+      @item = Limits::Helpers.validate_field!(:item, item)
       @value = Limits::Helpers.normalize_value(value)
-      @comment = Limits::Helpers.normalize_comment(comment)
+
+      # Taken as given. A comment is already its own text by the time it
+      # gets here: the comment property coerces what a recipe writes, and
+      # Limits::File unformats what it reads out of a file, which is the
+      # only place a comment arrives still wearing its '#'. Taking a '#' off
+      # here as well would strip one belonging to the comment's own text,
+      # writing '#4127 see the ticket' as '# 4127 see the ticket'.
+      @comment = comment
+
+      # A missing value is not bad input. It is how the rest of the
+      # cookbook asks a question rather than states a fact: both
+      # load_current_value and the delete action build an entry that names
+      # a limit without saying what it should be.
+      Limits::Helpers.validate_field!(:value, @value) unless @value.nil?
     end
 
     def id

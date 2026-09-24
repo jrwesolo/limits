@@ -3,7 +3,7 @@ maintainer       'Jordan Wesolowski'
 maintainer_email 'N/A'
 license          'MIT'
 description      'Configures limits for the pam_limits module'
-version          '3.0.0'
+version          '3.1.0'
 chef_version     '>= 18', '< 20'
 
 # The `source_url` points to the development repository for this cookbook.  A
