@@ -10,7 +10,7 @@ inputs:
       release cannot turn every pull request red on its own.
     required: false
     # renovate: cinc-workstation
-    default: 26.2.4
+    default: 26.3.0
 
 runs:
   using: composite
