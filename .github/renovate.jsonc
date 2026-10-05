@@ -10,7 +10,12 @@
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
 
   "timezone": "America/Denver",
-  "schedule": ["before 6am on monday"],
+
+  // The whole day rather than a few hours of it. The schedule only gates
+  // what Renovate does when it happens to run, and the hosted app can run a
+  // repository as rarely as once a day at a time of its choosing, so a
+  // narrow window can go unvisited for weeks with updates waiting.
+  "schedule": ["on monday"],
 
   // Stated rather than left to detection. Renovate infers the style from
   // history, and this repository writes plain imperative subjects, so it
