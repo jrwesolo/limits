@@ -36,9 +36,10 @@
 
   "packageRules": [
     {
-      // One pull request for everything. There are only a handful of
-      // dependencies here, so separate pull requests would be noise and a CI
-      // run apiece rather than one.
+      // One pull request for minor and patch updates, and a second for major
+      // updates, so a breaking major cannot hold back the rest. There are only
+      // a handful of dependencies here, so a pull request apiece would be
+      // noise and a CI run each rather than one or two.
       "matchPackageNames": ["*"],
       "groupName": "dependencies"
     },
