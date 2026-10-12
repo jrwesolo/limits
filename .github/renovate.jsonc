@@ -40,20 +40,49 @@
       // dependencies here, so separate pull requests would be noise and a CI
       // run apiece rather than one.
       "matchPackageNames": ["*"],
-      "groupName": "dependencies"
+      "groupName": "dependencies",
+
+      // Except major updates, which get a pull request of their own, so that a
+      // major that breaks the build cannot hold back the rest. This is
+      // Renovate's default, stated so that it reads as a choice.
+      "separateMajorMinor": true
+    },
+    {
+      // Only the version is taken from this image: CI installs the package,
+      // not the image, so there is no digest to pin, and the files carrying
+      // the version have nowhere to put one.
+      "matchPackageNames": ["cincproject/workstation"],
+      "pinDigests": false
+    },
+
+    // A release of what runs beside the Supermarket signing key waits a week
+    // before it is proposed, which leaves time for a compromised or broken
+    // release to be noticed and withdrawn upstream. CI catches a release that
+    // breaks the build, not one that passes and misbehaves later. With the
+    // Sunday schedule, a release arrives seven to thirteen days after it is
+    // published.
+    //
+    // Opted in here rather than set for everything. A release with no date
+    // is held forever under a minimum age, with nothing above a debug line
+    // to say so, and two dependencies here have none: the runner labels, and
+    // the Renovate image on GHCR. The linters run in a job that can only read
+    // the repository. Anything new that runs in the publish job belongs here,
+    // provided its registry reports release dates.
+    {
+      // The actions, all of which come through github-tags. The wait relies
+      // on the release dates Renovate reads, some of which the publisher
+      // sets, so it guards against an ordinary bad release, not one crafted
+      // to skip it. The digest pin still surfaces a moved tag, as a pull
+      // request that changes the commit without changing the version, for
+      // review to question.
+      "matchDatasources": ["github-tags"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
+      "matchPackageNames": ["cincproject/workstation"],
+      "minimumReleaseAge": "7 days"
     }
   ],
-
-  // Cinc Workstation releases, as omnitruck reports them. The endpoint
-  // answers with a bare JSON array of version strings, so it is reshaped
-  // into the releases list Renovate expects.
-  "customDatasources": {
-    "cinc-workstation": {
-      "defaultRegistryUrlTemplate": "https://omnitruck.cinc.sh/stable/cinc-workstation/versions/all",
-      "format": "json",
-      "transformTemplates": ["{\"releases\": $map($, function($v) { {\"version\": $v} })}"]
-    }
-  },
 
   // The Cinc Workstation version CI installs. It is a plain input default
   // rather than anything a package manager knows about, so the comment above
@@ -90,14 +119,20 @@
       "versioningTemplate": "semver"
     },
     {
+      // New versions are read from the Cinc project's cincproject/workstation
+      // image tags on Docker Hub, although CI installs the package from
+      // omnitruck. The image is built from the stable package once it is
+      // deployed, so every tag is a version omnitruck can install, and Docker
+      // Hub reports when each tag was pushed, which omnitruck does not. If
+      // the project stopped publishing the image, updates would stop with it.
       "customType": "regex",
       "managerFilePatterns": [
         "/^\\.github/actions/setup-cinc/action\\.yml$/",
         "/^TESTING\\.md$/"
       ],
       "matchStrings": ["renovate: cinc-workstation[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
-      "datasourceTemplate": "custom.cinc-workstation",
-      "depNameTemplate": "cinc-workstation",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "cincproject/workstation",
       "versioningTemplate": "semver"
     }
   ]
