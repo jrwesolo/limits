@@ -34,6 +34,13 @@
 
   "labels": ["dependencies"],
 
+  // A release has to be a week old before it is proposed, which leaves time
+  // for a compromised or broken release to be noticed and withdrawn upstream
+  // before it lands here. CI catches a release that breaks the build; it
+  // cannot catch one that passes and misbehaves later, and the actions run in
+  // the job that holds the Supermarket signing key.
+  "minimumReleaseAge": "7 days",
+
   "packageRules": [
     {
       // One pull request for everything. There are only a handful of
@@ -41,6 +48,24 @@
       // run apiece rather than one.
       "matchPackageNames": ["*"],
       "groupName": "dependencies"
+    },
+    {
+      // Sources with no release date to age. Without this, a dependency from
+      // one of them would never be proposed at all, so instead it is proposed
+      // without the wait: omnitruck lists Cinc Workstation versions without
+      // dates, and runner images are labels rather than releases.
+      "matchDatasources": ["custom.cinc-workstation", "github-runners"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
+    },
+    {
+      // Renovate reads no release dates from GHCR. The same image on Docker
+      // Hub has too many tags for an anonymous listing to reach their dates
+      // either, so it is proposed without the wait too. It only validates
+      // this file, in a job that can read the repository and nothing else.
+      // Drop this once Renovate reads release dates from GHCR:
+      // https://github.com/renovatebot/renovate/issues/39064
+      "matchPackageNames": ["ghcr.io/renovatebot/renovate"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
     }
   ],
 
