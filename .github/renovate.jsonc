@@ -15,7 +15,13 @@
   // what Renovate does when it happens to run, and the hosted app can run a
   // repository as rarely as once a day at a time of its choosing, so a
   // narrow window can go unvisited for weeks with updates waiting.
-  "schedule": ["on monday"],
+  //
+  // Sunday so that the window has closed by the time the pull requests are
+  // reviewed. Merging one while the window is still open frees its branch,
+  // and the next run opens another for whatever was released in between,
+  // which for a dependency that releases several times a day is a chain of
+  // pull requests rather than one.
+  "schedule": ["on sunday"],
 
   // Stated rather than left to detection. Renovate infers the style from
   // history, and this repository writes plain imperative subjects, so it
