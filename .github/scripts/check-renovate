@@ -33,9 +33,11 @@ trap 'rm -rf "${out}"' EXIT
 # into has to be writable by somebody other than whoever created it.
 chmod 0777 "${out}"
 
+# Strict, so that an option Renovate has renamed fails here rather than being
+# accepted with a warning and left for a migration pull request to fix later.
 echo "Validating the configuration"
 docker run --rm --volume "${PWD}:/repo:ro" --workdir /repo \
-  --entrypoint renovate-config-validator "${image}"
+  --entrypoint renovate-config-validator "${image}" --strict
 
 echo "Extracting dependencies"
 docker run --rm \
