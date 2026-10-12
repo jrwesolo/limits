@@ -53,16 +53,25 @@
     // A release of what runs beside the Supermarket signing key waits a week
     // before it is proposed, which leaves time for a compromised or broken
     // release to be noticed and withdrawn upstream. CI catches a release that
-    // breaks the build, not one that passes and misbehaves later.
+    // breaks the build, not one that passes and misbehaves later. With the
+    // Sunday schedule, a release arrives seven to thirteen days after it is
+    // published.
     //
     // Opted in here rather than set for everything. A release with no date
     // is held forever under a minimum age, with nothing above a debug line
     // to say so, and two dependencies here have none: the runner labels, and
-    // the Renovate image on GHCR. The linters run in a job that
-    // can only read the repository. Anything new that runs in the publish job
-    // belongs here, provided its registry reports release dates.
+    // the Renovate image on GHCR. The linters run in a job that can only read
+    // the repository. Anything new that runs in the publish job belongs here,
+    // provided its registry reports release dates.
     {
-      // The actions, all of which come through github-tags.
+      // The actions, all of which come through github-tags. Their dates are
+      // git's: the commit date for a lightweight tag, the tagger date for an
+      // annotated one, and whoever makes the commit or the tag sets them. The
+      // wait covers a release that is broken or compromised in the ordinary
+      // way, not one deliberately backdated to skip it. Nor does it cover a
+      // tag moved to a new commit, which ages against the original release;
+      // the digest pin surfaces that instead, as a pull request that changes
+      // the commit without changing the version, for review to question.
       "matchDatasources": ["github-tags"],
       "minimumReleaseAge": "7 days"
     },
