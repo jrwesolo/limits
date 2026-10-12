@@ -36,12 +36,16 @@
 
   "packageRules": [
     {
-      // One pull request for minor and patch updates, and a second for major
-      // updates, so a breaking major cannot hold back the rest. There are only
-      // a handful of dependencies here, so a pull request apiece would be
-      // noise and a CI run each rather than one or two.
+      // One pull request for everything. There are only a handful of
+      // dependencies here, so separate pull requests would be noise and a CI
+      // run apiece rather than one.
       "matchPackageNames": ["*"],
-      "groupName": "dependencies"
+      "groupName": "dependencies",
+
+      // Except major updates, which get a pull request of their own, so that a
+      // major that breaks the build cannot hold back the rest. This is
+      // Renovate's default, stated so that it reads as a choice.
+      "separateMajorMinor": true
     },
     {
       // Only the version is taken from this image: CI installs the package,
