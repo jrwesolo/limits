@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#
+# Runs a command inside the pinned Cinc Workstation image, so that CI and a
+# workstation use the same toolchain without installing it:
+#
+#   .github/scripts/workstation cinc exec rspec
+#
+# The image is the Cinc project's own, addressed by tag and digest like the
+# other containers here.
+#
+# The checkout is mounted at the same path inside the container as outside it,
+# and so is the temporary directory. Test Kitchen asks the Docker daemon for
+# containers of its own, and the daemon resolves any path it is handed on the
+# host, not in here; a checkout mounted somewhere else would hand it paths that
+# do not exist. The temporary directory is where publish stages the cookbook
+# and its key before knife reads them.
+#
+# Where the Docker socket exists it is passed through, with the host network,
+# so that Test Kitchen can start its instances and reach them.
+#
+# The container runs as root over a checkout owned by somebody else, which git
+# refuses to read without being told the directory is safe.
+#
+# The first `cinc exec` in a home directory with no .cinc in it writes one, and
+# prints a bare newline to standard output while doing so. Every container
+# starts with a fresh home, so every command would be that first call, and a
+# script reading its output would get a line it did not print. A throwaway call
+# pays for it before the command runs.
+#
+# Run it from the root of a checkout.
+
+set -euo pipefail
+
+# renovate: docker cincproject/workstation
+version=26.3.0
+digest=sha256:b19f9949b1012e5a9cd93b68ee1d00b705fc66e1d47f4283471cddf293500830
+
+if ! command -v docker >/dev/null; then
+  echo "::error::docker is required to run the pinned Cinc Workstation."
+  exit 1
+fi
+
+if (($# == 0)); then
+  echo "usage: ${0##*/} command [argument...]" >&2
+  exit 2
+fi
+
+tmp=${TMPDIR:-/tmp}
+tmp=${tmp%/}
+
+options=(
+  --rm
+  --volume "${PWD}:${PWD}"
+  --workdir "${PWD}"
+  --volume "${tmp}:${tmp}"
+  --env "TMPDIR=${tmp}"
+  --env GIT_CONFIG_COUNT=1
+  --env GIT_CONFIG_KEY_0=safe.directory
+  --env 'GIT_CONFIG_VALUE_0=*'
+)
+
+if [[ -S /var/run/docker.sock ]]; then
+  options+=(--volume /var/run/docker.sock:/var/run/docker.sock --network host)
+fi
+
+# shellcheck disable=SC2016 # expanded by the shell inside the container
+exec docker run "${options[@]}" "cincproject/workstation:${version}@${digest}" \
+  bash -c 'cinc exec ruby -e "" >/dev/null && exec "$@"' workstation "$@"

@@ -1,8 +1,8 @@
 CI conventions
 ==============
 
-The workflow, the scripts its jobs run, and the composite action that
-installs the toolchain. Together they decide whether a pull request may
+The workflow and the scripts its jobs run, among them the one that runs the
+toolchain image. Together they decide whether a pull request may
 merge and what gets released, so they are held to a higher standard than a
 local helper. Each script and each workflow job carries its own detail in
 a header comment; this file carries what they have in common.
@@ -22,12 +22,7 @@ What is here
 | `release` | Tags a merge to `main` and writes its release notes. Says what it released, or that nothing was, in the job summary |
 | `publish` | Shares a tagged cookbook to Supermarket. Links the published version in the job summary |
 | `lib.bash` | Shared helpers. Sourced, never executed |
-| `detect-platform` | Prints the platform whose Cinc package the cache is keyed on |
-| `install-cinc` | Installs the pinned Cinc Workstation, reusing a cached package |
-
-The last two ship with the `setup-cinc` action and sit beside its
-`action.yml` rather than in `.github/scripts`, for the reason "The
-composite action" below gives.
+| `workstation` | Runs a command inside the pinned Cinc Workstation image |
 
 Fail loudly, or do not bother
 -----------------------------
@@ -142,9 +137,10 @@ is what it is for, but it cannot tell you that a new Fedora or Debian
 exists. Adding a platform stays something somebody notices upstream and
 decides to do.
 
-Cinc Workstation itself is tracked, through a custom datasource against the
-omnitruck version list, and the marker sits in both `action.yml` and
-`TESTING.md` so the documented version cannot drift from the installed one.
+Cinc Workstation itself is tracked as the `cincproject/workstation` image
+pinned in the `workstation` script, and `TESTING.md` carries a marker that
+resolves to the same image, so the documented version cannot drift from the
+one CI runs.
 The Cinc client majors in the kitchen suites are a different thing and are
 outside Renovate: they are floating major tags, no datasource knows which
 lines are current, and raising the floor is a major release rather than a
@@ -166,10 +162,9 @@ Script or composite action
 Both keep logic out of the YAML, and the script is the default. An action
 earns its place only when one of these is true:
 
-* It bundles several steps. Installing the toolchain is three: detect the
-  platform, restore the cache, install.
-* It has to call another action. `actions/cache` is reachable only from a
-  step, so anything that caches has to live in an action.
+* It bundles several steps that always run together.
+* It has to call another action. `actions/cache`, for one, is reachable
+  only from a step, so anything that caches has to live in an action.
 * More than one job uses it.
 * Another repository has to be able to use it. Actions are addressable
   from elsewhere; scripts are not.
@@ -180,18 +175,11 @@ makes these scripts debuggable: a script runs by hand from a checkout, so
 a failure can be reproduced without pushing a commit and waiting for a
 runner. An action cannot, without a harness to feed it.
 
-The composite action
---------------------
-
 A composite action's `run` steps execute in the caller's working directory
 rather than in the action's own, so a repository relative path to a script
 beside `action.yml` resolves only while the action happens to be checked
-out at the root of the repository using it. Address anything the action
+out at the root of the repository using it. Address anything an action
 ships through `${{ github.action_path }}`.
-
-Its scripts follow everything above: `set -euo pipefail`, no extension,
-runnable by hand, and the environment they need declared in the step that
-calls them rather than assumed.
 
 Nothing under `.github/` is published, so changes here never need a new
 cookbook version.

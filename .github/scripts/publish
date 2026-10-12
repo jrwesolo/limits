@@ -13,7 +13,7 @@
 # without uploading, so a re-run of a partially failed job is safe.
 #
 # Expects SUPERMARKET_USER and SUPERMARKET_KEY (the PEM itself, not a path) in
-# the environment, and cinc, git, curl and tar on PATH. Run it from the root of
+# the environment, and docker, git, curl and tar on PATH. Run it from the root of
 # a checkout that has origin set.
 
 set -euo pipefail
@@ -120,7 +120,7 @@ key_file="${staging}/client.pem"
 (umask 077; printf '%s\n' "${SUPERMARKET_KEY}" > "${key_file}")
 
 echo "Sharing ${name} ${version} to ${site}"
-cinc exec knife supermarket share "${name}" \
+"$(dirname "${BASH_SOURCE[0]}")/workstation" cinc exec knife supermarket share "${name}" \
   --cookbook-path "${staging}" \
   --supermarket-site "${site}" \
   --user "${SUPERMARKET_USER}" \

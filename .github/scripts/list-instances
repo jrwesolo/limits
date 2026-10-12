@@ -16,7 +16,7 @@ set -euo pipefail
 # shellcheck source=.github/scripts/lib.bash
 source "$(dirname "${BASH_SOURCE[0]}")/lib.bash"
 
-listing="$(cinc exec kitchen list --json)"
+listing="$("$(dirname "${BASH_SOURCE[0]}")/workstation" cinc exec kitchen list --json)"
 instances="$(jq -c '[.[].instance]' <<<"${listing}")"
 
 # An empty matrix is a kitchen.yml that declares nothing, or a listing this

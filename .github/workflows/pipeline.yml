@@ -33,9 +33,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup-cinc
       - name: Cookstyle
-        run: cinc exec cookstyle
+        run: .github/scripts/workstation cinc exec cookstyle
       # The shell scripts, the workflow and the Renovate config are what
       # decide whether a pull request can merge, so they are linted rather
       # than only read. Each linter runs from a container pinned by tag and
@@ -54,9 +53,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup-cinc
       - name: RSpec
-        run: cinc exec rspec
+        run: .github/scripts/workstation cinc exec rspec
 
   # Pull requests only. On main the premise is inverted: once a release is
   # tagged, metadata.rb keeps that version until the next bump, so "the version
@@ -71,7 +69,6 @@ jobs:
       # Deciding what a commit would publish means asking chefignore, through
       # the class Chef itself uses, rather than keeping a second list of paths
       # here that would drift.
-      - uses: ./.github/actions/setup-cinc
       - name: Check the version is unreleased and documented
         env:
           GH_TOKEN: ${{ github.token }}
@@ -86,7 +83,6 @@ jobs:
       instances: ${{ steps.list.outputs.instances }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup-cinc
       - name: Collect Test Kitchen instances
         id: list
         run: .github/scripts/list-instances
@@ -102,16 +98,15 @@ jobs:
         instance: ${{ fromJSON(needs.discover.outputs.instances) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup-cinc
       # Policyfile.lock.json is not committed, so resolve it before Test Kitchen
       # exports the policy into the dokken sandbox.
       - name: Resolve Policyfile
-        run: cinc-cli install
+        run: .github/scripts/workstation cinc-cli install
       # Destroy unconditionally rather than only on success. The runner is
       # ephemeral so it changes nothing here, but it keeps the command correct
       # if these ever move to a self-hosted runner that outlives the job.
       - name: Test Kitchen
-        run: cinc exec kitchen test --destroy always ${{ matrix.instance }}
+        run: .github/scripts/workstation cinc exec kitchen test --destroy always ${{ matrix.instance }}
 
   # One status check with a stable name, so that a branch ruleset can require
   # the integration suites without naming each instance of a matrix that is
@@ -188,7 +183,6 @@ jobs:
     environment: supermarket
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup-cinc
       - name: Share to Supermarket
         env:
           SUPERMARKET_USER: ${{ vars.SUPERMARKET_USER }}

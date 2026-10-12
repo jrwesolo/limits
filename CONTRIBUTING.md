@@ -45,7 +45,6 @@ Where things live
 | `test/integration/default/` | InSpec profile that asserts the result |
 | `.github/workflows/` | The pipeline: tests on every pull request, release and publish on merges to `main` |
 | `.github/scripts/` | What those jobs run, plus the shell library they share |
-| `.github/actions/setup-cinc/` | Composite action that installs and caches the pinned Cinc Workstation |
 | `AGENTS.md` | Conventions worth reading before changing any of the above |
 
 Specs mirror the library one file each, named after the class or

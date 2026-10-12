@@ -44,36 +44,14 @@
     }
   ],
 
-  // Cinc Workstation releases, as omnitruck reports them. The endpoint
-  // answers with a bare JSON array of version strings, so it is reshaped
-  // into the releases list Renovate expects.
-  "customDatasources": {
-    "cinc-workstation": {
-      "defaultRegistryUrlTemplate": "https://omnitruck.cinc.sh/stable/cinc-workstation/versions/all",
-      "format": "json",
-      "transformTemplates": ["{\"releases\": $map($, function($v) { {\"version\": $v} })}"]
-    }
-  },
-
-  // The Cinc Workstation version CI installs. It is a plain input default
-  // rather than anything a package manager knows about, so the comment above
-  // it is what marks it as a dependency.
-  //
-  // TESTING.md states the same version, so it carries the same marker and is
-  // updated in the same pull request: both resolve to one dependency at one
-  // version, which Renovate puts on a single branch.
-  //
-  // The pattern is deliberately shape-agnostic, "the marker line, then the
-  // first version on the next line", so that it reads a YAML comment and a
-  // Markdown comment without caring which file it is in.
   "customManagers": [
     {
-      // The containers the lint job runs, marked the same
-      // way as the Cinc pin above: a marker line naming the datasource and the
-      // image, then the first version on the line below it.
+      // The containers CI runs, each pinned in the script that runs it and
+      // marked by a line naming the datasource and the image, with the
+      // version on the line below and the digest below that.
       //
       // The leading v is part of the version and has to be captured with it.
-      // A docker tag is whatever the publisher called it, and these three do
+      // A docker tag is whatever the publisher called it, and these images do
       // not agree: shellcheck publishes v0.11.0 while actionlint publishes
       // 1.7.12. Capturing the digits alone sent Renovate to look up a tag
       // that does not exist, which fails as "could not determine new digest"
@@ -83,21 +61,22 @@
       "managerFilePatterns": [
         "/^\\.github/scripts/check-renovate$/",
         "/^\\.github/scripts/check-shell$/",
-        "/^\\.github/scripts/check-workflows$/"
+        "/^\\.github/scripts/check-workflows$/",
+        "/^\\.github/scripts/workstation$/"
       ],
       "matchStrings": ["renovate: docker (?<depName>\\S+)[^\\n]*\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+\\.\\d+)[^\\n]*\\n[^\\n]*?(?<currentDigest>sha256:[0-9a-f]{64})"],
       "datasourceTemplate": "docker",
       "versioningTemplate": "semver"
     },
     {
+      // TESTING.md states the Cinc Workstation version the workstation script
+      // runs. Both resolve to the same image, so Renovate moves them together
+      // on one branch.
       "customType": "regex",
-      "managerFilePatterns": [
-        "/^\\.github/actions/setup-cinc/action\\.yml$/",
-        "/^TESTING\\.md$/"
-      ],
+      "managerFilePatterns": ["/^TESTING\\.md$/"],
       "matchStrings": ["renovate: cinc-workstation[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
-      "datasourceTemplate": "custom.cinc-workstation",
-      "depNameTemplate": "cinc-workstation",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "cincproject/workstation",
       "versioningTemplate": "semver"
     }
   ]
