@@ -1,0 +1,11 @@
+# actionlint checks every runs-on label against a list of GitHub-hosted
+# runners compiled into it, so a runner image GitHub has released but
+# actionlint has not yet learned about is reported as an unknown label.
+# Declaring it here as a self-hosted label is the escape hatch actionlint's
+# own error message points to.
+#
+# Delete each entry once the pinned actionlint knows the label itself:
+# https://github.com/rhysd/actionlint/issues/682
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
