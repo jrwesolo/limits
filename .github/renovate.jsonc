@@ -41,19 +41,15 @@
       // run apiece rather than one.
       "matchPackageNames": ["*"],
       "groupName": "dependencies"
+    },
+    {
+      // Only the version is taken from this image: CI installs the package,
+      // not the image, so there is no digest to pin, and the files carrying
+      // the version have nowhere to put one.
+      "matchPackageNames": ["cincproject/workstation"],
+      "pinDigests": false
     }
   ],
-
-  // Cinc Workstation releases, as omnitruck reports them. The endpoint
-  // answers with a bare JSON array of version strings, so it is reshaped
-  // into the releases list Renovate expects.
-  "customDatasources": {
-    "cinc-workstation": {
-      "defaultRegistryUrlTemplate": "https://omnitruck.cinc.sh/stable/cinc-workstation/versions/all",
-      "format": "json",
-      "transformTemplates": ["{\"releases\": $map($, function($v) { {\"version\": $v} })}"]
-    }
-  },
 
   // The Cinc Workstation version CI installs. It is a plain input default
   // rather than anything a package manager knows about, so the comment above
@@ -90,14 +86,20 @@
       "versioningTemplate": "semver"
     },
     {
+      // New versions are read from the Cinc project's cincproject/workstation
+      // image tags on Docker Hub, although CI installs the package from
+      // omnitruck. The image is built from the stable package once it is
+      // deployed, so every tag is a version omnitruck can install, and Docker
+      // Hub reports when each tag was pushed, which omnitruck does not. If
+      // the project stopped publishing the image, updates would stop with it.
       "customType": "regex",
       "managerFilePatterns": [
         "/^\\.github/actions/setup-cinc/action\\.yml$/",
         "/^TESTING\\.md$/"
       ],
       "matchStrings": ["renovate: cinc-workstation[^\\n]*\\n[^\\n]*?(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
-      "datasourceTemplate": "custom.cinc-workstation",
-      "depNameTemplate": "cinc-workstation",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "cincproject/workstation",
       "versioningTemplate": "semver"
     }
   ]

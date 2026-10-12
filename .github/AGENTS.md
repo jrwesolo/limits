@@ -142,8 +142,9 @@ is what it is for, but it cannot tell you that a new Fedora or Debian
 exists. Adding a platform stays something somebody notices upstream and
 decides to do.
 
-Cinc Workstation itself is tracked, through a custom datasource against the
-omnitruck version list, and the marker sits in both `action.yml` and
+Cinc Workstation itself is tracked through the tags of the Cinc project's
+`cincproject/workstation` image rather than omnitruck, whose version list
+carries no release dates, and the marker sits in both `action.yml` and
 `TESTING.md` so the documented version cannot drift from the installed one.
 The Cinc client majors in the kitchen suites are a different thing and are
 outside Renovate: they are floating major tags, no datasource knows which
