@@ -36,11 +36,11 @@
 
   "packageRules": [
     {
-      // One pull request for everything. There are two actions and one
-      // toolchain pin here, so separate pull requests would be noise and
-      // three CI runs rather than one.
+      // One pull request for everything. There are only a handful of
+      // dependencies here, so separate pull requests would be noise and a CI
+      // run apiece rather than one.
       "matchPackageNames": ["*"],
-      "groupName": "all updates"
+      "groupName": "dependencies"
     }
   ],
 
