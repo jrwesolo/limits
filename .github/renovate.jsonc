@@ -1,13 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 
-  // pinGitHubActionDigests is the point of the whole arrangement. Actions are
+  // The Renovate maintainers' own preset rather than a hand-picked list.
+  // Pinning action digests is the part that matters most here. Actions are
   // referenced by commit SHA rather than by tag, because a tag is mutable and
   // these workflows carry a Supermarket signing key: whoever controls an
   // action can move v7 to point at anything, and nothing in a diff would show
-  // it. This preset rewrites the SHA and the trailing version comment
+  // it. The preset rewrites the SHA and the trailing version comment
   // together, so the readable version never drifts from the pin.
-  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "extends": ["config:best-practices"],
 
   "timezone": "America/Denver",
 
@@ -30,11 +31,6 @@
   // had them, which matters because pull requests are squashed and the title
   // becomes the subject on main.
   "semanticCommits": "disabled",
-
-  // Raises a pull request when Renovate renames a configuration field rather
-  // than quietly falling back to the deprecated one. Not hypothetical:
-  // managerFilePatterns below is a recent rename of fileMatch.
-  "configMigration": true,
 
   "labels": ["dependencies"],
 
