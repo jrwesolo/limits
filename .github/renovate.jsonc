@@ -64,14 +64,12 @@
     // the repository. Anything new that runs in the publish job belongs here,
     // provided its registry reports release dates.
     {
-      // The actions, all of which come through github-tags. Their dates are
-      // git's: the commit date for a lightweight tag, the tagger date for an
-      // annotated one, and whoever makes the commit or the tag sets them. The
-      // wait covers a release that is broken or compromised in the ordinary
-      // way, not one deliberately backdated to skip it. Nor does it cover a
-      // tag moved to a new commit, which ages against the original release;
-      // the digest pin surfaces that instead, as a pull request that changes
-      // the commit without changing the version, for review to question.
+      // The actions, all of which come through github-tags. The wait relies
+      // on the release dates Renovate reads, some of which the publisher
+      // sets, so it guards against an ordinary bad release, not one crafted
+      // to skip it. The digest pin still surfaces a moved tag, as a pull
+      // request that changes the commit without changing the version, for
+      // review to question.
       "matchDatasources": ["github-tags"],
       "minimumReleaseAge": "7 days"
     },
