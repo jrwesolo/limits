@@ -17,8 +17,8 @@
 set -euo pipefail
 
 # renovate: docker ghcr.io/renovatebot/renovate
-version=44.182.2
-digest=sha256:a3bb448e88ac8517754beccbde3a5621e41eced3f3e4e61c1f6db0ced2affb37
+version=44.200.1
+digest=sha256:d2c9fe4124062e44b64b568f038fedf661ff86dcd6bc6f8d56c57a6d1889c3be
 
 if ! command -v docker >/dev/null; then
   echo "::error::docker is required to run the pinned Renovate."
