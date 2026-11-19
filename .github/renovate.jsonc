@@ -34,6 +34,12 @@
 
   "labels": ["dependencies"],
 
+  // Merged without a further click, but not without review. The rulesets on
+  // main still require an approval and every CI check, and GitHub holds the
+  // merge until both are met, so an approval is the last step rather than the
+  // second to last. That depends on the repository allowing auto-merge.
+  "automerge": true,
+
   "packageRules": [
     {
       // One pull request for everything. There are only a handful of
